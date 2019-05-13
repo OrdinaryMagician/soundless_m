@@ -16,8 +16,9 @@ skill easy
 	ACSReturn = 2
 	DamageFactor = 0.5
 	MonsterHealth = 0.75
-	MustConfirm = "For newcomers. Enemies will be much weaker and you will find more items to assist you."
-	DisableCheats
+	MustConfirm = "For newcomers.\
+\
+Enemies will be much weaker and you will find more items to assist you."
 }
 skill medium
 {
@@ -25,7 +26,6 @@ skill medium
 	SpawnFilter = 3
 	ACSReturn = 3
 	MustConfirm = "The way it's meant to be played."
-	DisableCheats
 	DefaultSkill
 }
 skill hard
@@ -35,7 +35,11 @@ skill hard
 	ACSReturn = 4
 	DamageFactor = 1.5
 	MonsterHealth = 1.25
-	MustConfirm = "If you seek a real challenge. Enemies will be much stronger and resources more scarce."
+	MustConfirm = "If you seek a real challenge.\
+\
+Enemies will be much stronger and resources more scarce.\
+\
+Cheats are disabled."
 	DisableCheats
 }
 

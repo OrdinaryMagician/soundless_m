@@ -21,6 +21,7 @@ Class JohnDoe : DoomPlayer
 		Player.SideMove 0.25, 0.3;
 		Player.StartItem "DummyKey";
 		Player.UseRange 40;
+		Player.DamageScreenColor "A0 00 FF", 0.6, "DarkFire";
 		BloodType "mkBlood";
 	}
 	void PlayFootstep( Actor onactor )
@@ -263,6 +264,7 @@ Class MapHandler : StaticEventHandler
 	CVar tmap;
 	int lasttmap;
 	Line lastactivated;
+	ui bool noclipwarn;
 
 	override void WorldLoaded( WorldEvent e )
 	{
@@ -344,6 +346,16 @@ Class MapHandler : StaticEventHandler
 		// wavy camera for TITLEMAP
 		players[consoleplayer].mo.A_SetAngle(sin(gametic*0.233)*20.0,SPF_INTERPOLATE);
 		players[consoleplayer].mo.A_SetPitch(sin(gametic*0.124)*10.0,SPF_INTERPOLATE);
+	}
+
+	override void PostUiTick()
+	{
+		// noclip warning
+		if ( (players[consoleplayer].cheats&CF_NOCLIP || players[consoleplayer].cheats&CF_NOCLIP2) && !noclipwarn )
+		{
+			noclipwarn = true;
+			Console.Printf("\cgWARNING:\ca Misuse of noclip CAN and WILL cause many issues due to how the map works.\c-");
+		}
 	}
 }
 
