@@ -12,6 +12,7 @@
 global int 1:keyused[];
 global int 2:initialized;
 global int 3:hassaved;
+global int 4:blockdoors;
 
 int lastspot = -1;
 
@@ -1452,6 +1453,11 @@ function void DoorClose( int index )
 // replace most of this with a small zscript interface
 SCRIPT "DoorScript" ( int index )
 {
+	if ( blockdoors )
+	{
+		SetResultValue(0);
+		terminate;
+	}
 	if ( !DoorOpen(index) )
 	{
 		Delay(10);
@@ -1488,4 +1494,11 @@ SCRIPT "DoorScript" ( int index )
 	HudMessage(s:"A";HUDMSG_FADEOUT,2,CR_UNTRANSLATED,160.0,120.0,0.0,0.5);
 	ScriptCall("mkAmbMix","Unmute",0.5);
 	Delay(10);
+}
+
+// Addition to prevent sequence breaking
+SCRIPT "ToggleDoorActivation" ( int toggle )
+{
+	if ( toggle ) blockdoors = 0;
+	else blockdoors = 1;
 }

@@ -21,7 +21,7 @@ Class JohnDoe : DoomPlayer
 		Player.SideMove 0.25, 0.3;
 		Player.StartItem "DummyKey";
 		Player.UseRange 40;
-		Player.DamageScreenColor "A0 00 FF", 0.6, "DarkFire";
+		Player.DamageScreenColor "A0 00 FF", 1.0, "DarkFire";
 		BloodType "mkBlood";
 	}
 	void PlayFootstep( Actor onactor )

@@ -347,9 +347,9 @@ Class mkCritter1 : mkCritter
 		Loop;
 	Melee:
 		CRI1 E 0 A_PlaySound(SeeSound,CHAN_WEAPON);
-		CRI1 E 6 { A_FaceTarget(); A_Recoil(-0.5); }
-		CRI1 F 6 A_FaceTarget();
-		CRI1 G 4 A_Critter1Atk();
+		CRI1 E 5 { A_FaceTarget(); A_Recoil(-0.5); }
+		CRI1 F 4 A_FaceTarget();
+		CRI1 G 3 A_Critter1Atk();
 		CRI1 G 0 A_JumpMove();
 		Goto Melee+1;
 	Pain:
@@ -453,8 +453,8 @@ Class mkCritter2 : mkCritter
 		Loop;
 	Melee:
 		CRI2 E 0 A_PlaySound(MeleeSound,CHAN_WEAPON);
-		CRI2 E 6 { A_FaceTarget(); A_Recoil(-0.5); }
-		CRI2 FG 8 { A_Critter2Atk(); }
+		CRI2 E 9 { A_FaceTarget(); A_Recoil(-0.5); }
+		CRI2 FG 6 { A_Critter2Atk(); }
 		CRI2 G 0 A_JumpMove();
 		Goto Melee+1;
 	Pain:
@@ -570,13 +570,13 @@ Class mkCritter3 : mkCritter
 		Loop;
 	Melee:
 		CRI3 F 0 A_Jump(128,"Melee2");
-		CRI3 F 5 { A_FaceTarget(); A_Recoil(-1.0); }
+		CRI3 F 8 { A_FaceTarget(); A_Recoil(-1.0); }
 		CRI3 EF 5 A_FaceTarget();
 		CRI3 G 15 A_Critter3Atk();
 		CRI3 F 0 A_JumpMove();
 		Goto Melee2;
 	Melee2:
-		CRI3 Q 5 { A_FaceTarget(); A_Recoil(-1.0); }
+		CRI3 Q 8 { A_FaceTarget(); A_Recoil(-1.0); }
 		CRI3 PQ 5 A_FaceTarget();
 		CRI3 R 15 A_Critter3Atk();
 		CRI3 Q 0 A_JumpMove();
@@ -1288,6 +1288,11 @@ Class mkLurker : Actor
 	}
 	action void A_Approach()
 	{
+		if ( !target )
+		{
+			SetStateLabel("Spawn");
+			return;
+		}
 		// approach player
 		Vector2 approachdir = invoker.Vec2To(target).unit();
 		A_SetAngle(atan2(approachdir.y,approachdir.x));

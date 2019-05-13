@@ -1,0 +1,39 @@
+Update 1: Patched for 3.3.x compatibility.
+
+Update 2: A couple small bugs have been patched and some extra things have been added.
+
+- Knife and Crowbar can now directly activate their respective puzzles (GZDoom 3.3.2 addition).
+- Range of melee weapons has been reduced slightly.
+- Fixed AI routine of critters with AMBUSH (previously they wouldn't check sight until they heard a noise).
+- Copied Strife inventory behavior so items can be used with a single press.
+- Restored intended Crowbar crit behavior (squared damage).
+- Doubled health of Bruiser Critter so it's more of a threat.
+- Implemented easy mode, reduces enemy damage and health and adds more items.
+- Implemented hard mode, increased enemy damage and health and removes a couple items here and there.
+- Made shaders configurable.
+- Flashlight now uses a spotlight.
+
+Update 3: Fixed crash after picking up Pearl Key due to door transition activator being null.
+
+Update 4: Various small fixes.
+
+Update 5: Fixes and rebalancing.
+
+- Texture misalignment corrections (Thanks, Rachael).
+- Hard mode has been rebalanced.
+- Fixed some breakage in the monster AI (e.g.: constantly re-entering chase state when player is dead or constantly attacking a dead player)
+
+Update 6: Minor bug fixes and more tweaks.
+
+- Monster attack behavior and health have been rebalanced.
+- Cheats are enabled in Easy and Medium now.
+
+Update 7: Map stuff fixed and even more rebalancing.
+
+- Added missing blocking flags to some lines.
+- Corrected a 3D floor tag (those chairs look normal now).
+- Fixed a certain floor lowering 64 units instead of the intended 8.
+
+Update 8: Sequence breaking?
+
+- Added a way to inhibit door activation while in cutscenes to prevent race conditions.

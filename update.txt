@@ -1,1 +1,0 @@
-This edition of the demo has been patched for 3.3.x compatibility.
