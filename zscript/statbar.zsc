@@ -2,11 +2,10 @@
 // not a lot of effort was put into it
 Class mkStatBar : BaseStatusBar
 {
-	HUDFont mBaseFont, mTinyFont;
+	HUDFont mBaseFont, mTinyFont, mSmallFont;
 	InventoryBarState InvBar;
 	DynamicValueInterpolator HealthInter;
 	Inventory LastSelected;
-	bool lastvisible;
 
 	override void Init()
 	{
@@ -15,11 +14,11 @@ Class mkStatBar : BaseStatusBar
 		mBaseFont = HUDFont.Create(f);
 		f = "HWFONTTY";
 		mTinyFont = HUDFont.Create(f);
+		mSmallFont = HUDFont.Create(SmallFont);
 		SetSize(0,320,200);
 		InvBar = InventoryBarState.CreateNoBox(mTinyFont,leftgfx:"",rightgfx:"");
 		HealthInter = DynamicValueInterpolator.Create(0,0.25,1,4);
 		LastSelected = null;
-		lastvisible = false;
 	}
 
 	override void Draw( int state, double TicFrac )
@@ -40,8 +39,8 @@ Class mkStatBar : BaseStatusBar
 			DrawString(mBaseFont,FormatNumber(CurAmmo.Amount,3),(32,-27.5),DI_TEXT_ALIGN_RIGHT,Font.CR_WHITE);
 			DrawImage("amicon",(36,-28),DI_ITEM_LEFT_TOP);
 		}
-		if ( isInventoryBarVisible() ) DrawInventoryBar(InvBar,(-8,-8),1,DI_SCREEN_RIGHT_BOTTOM|DI_ITEM_RIGHT,HX_SHADOW);
-		else if ( CPlayer.mo.InvSel )
+		CPlayer.inventorytics = 0;
+		if ( CPlayer.mo.InvSel )
 		{
 			DrawInventoryIcon(CPlayer.mo.InvSel,(-24,-24),DI_ITEM_CENTER,0.8);
 			if ( CPlayer.mo.InvSel.amount > 1 ) DrawString(mTinyFont,FormatNumber(CPlayer.mo.InvSel.amount,0,5),(-9,-(9+mTinyFont.mFont.GetHeight())),DI_TEXT_ALIGN_RIGHT,alpha:0.8);
@@ -49,6 +48,42 @@ Class mkStatBar : BaseStatusBar
 		}
 	}
 
+	override void DrawAutomapHUD( double ticFrac )
+	{
+		let scale = GetHUDScale();
+		double textdist = 8./scale.Y;
+		int height = SmallFont.GetHeight();
+		String printtext;
+		int SCREENWIDTH = screen.GetWidth();
+		int crdefault = Font.CR_GREY;
+		int highlight = Font.CR_UNTRANSLATED;
+		BeginHUD();
+		// Draw timer
+		let y = textdist;
+		let width = SmallFont.StringWidth("00:00:00");
+		if ( am_showtime )
+		{
+			printtext = level.TimeFormatted();
+			DrawString(mSmallFont,level.TimeFormatted(),(-textdist-width,y),0,crdefault);
+			y += height;
+		}
+		if ( am_showtotaltime ) DrawString(mSmallFont,level.TimeFormatted(true),(-textdist-width,y),0,crdefault);
+		y = textdist;
+		// Draw monster count
+		if ( am_showmonsters )
+		{
+			DrawString(mSmallFont, String.Format("%s\34%c %d/%d", Stringtable.Localize("$AM_MONSTERS"), crdefault+65, level.killed_monsters, level.total_monsters), (textdist, y), 0, highlight);
+			y += height;
+		}
+		// Draw room count
+		if ( am_showsecrets )
+		{
+			DrawString(mSmallFont, String.Format("%s\34%c %d/%d", Stringtable.Localize("$AM_ROOMS"), crdefault+65, level.found_secrets, level.total_secrets), (textdist, y), 0, highlight);
+			y += height;
+		}
+		// Draw item count
+		if ( am_showitems ) DrawString(mSmallFont, String.Format("%s\34%c %d/%d", Stringtable.Localize("$AM_ITEMS"), crdefault+65, level.found_items, level.total_items), (textdist, y), 0, highlight);
+	}
 	override void NewGame()
 	{
 		Super.NewGame();
@@ -59,9 +94,8 @@ Class mkStatBar : BaseStatusBar
 	{
 		Super.Tick();
 		HealthInter.Update(CPlayer.Health);
-		if ( LastSelected && ((lastvisible != isInventoryBarVisible()) || (LastSelected != CPlayer.mo.InvSel)) )
+		if ( LastSelected && (LastSelected != CPlayer.mo.InvSel) )
 			S_Sound("item/select",CHAN_6);
-		lastvisible = isInventoryBarVisible();
 		LastSelected = CPlayer.mo.InvSel;
 	}
 }

@@ -81,7 +81,8 @@ SCRIPT "JustLoaded" ( void )
 	HudMessage(s:"A";HUDMSG_PLAIN,1,CR_UNTRANSLATED,160.0,120.0,0.0);
 	Delay(3);
 	AmbientSound("map/load",127);
-	Delay(Random(80,140));
+	if ( GetCVar("sm_fakeload") ) Delay(Random(80,140));
+	else Delay(35);
 	HudMessage(s:"A";HUDMSG_FADEOUT,1,CR_UNTRANSLATED,160.0,120.0,0.0,1.0);
 	TakeInventory("LoadedGameToken",1);
 	SetPlayerProperty(true,off,PROP_TOTALLYFROZEN);
@@ -170,6 +171,7 @@ function void JammedMsg( void )
 {
 	str msgn = StrParam(s:"JAM_",d:Random(1,7));
 	Print(l:msgn);
+	ScriptCall("mkACSUtil","MarkJammed");
 }
 
 // returns true if the door is unlocked
@@ -182,6 +184,7 @@ function bool IsUnlocked( int type, int key )
 		snd = StrParam(s:"door/locked",d:type);
 		Print(l:"LOCKMSG");
 		PlaySound(0,snd,CHAN_5);
+		ScriptCall("mkACSUtil","MarkLocked");
 		return false;	// perma-locked
 	}
 	if ( keyused[key-1] ) return true;
@@ -193,12 +196,14 @@ function bool IsUnlocked( int type, int key )
 		keyused[key-1] = 1;
 		PlaySound(0,"door/unlock",CHAN_5);
 		TakeInventory(kclass,1);
+		ScriptCall("mkACSUtil","MarkUnlocked");
 	}
 	else
 	{
 		snd = StrParam(s:"door/locked",d:type);
 		Print(l:"LOCKMSG");
 		PlaySound(0,snd,CHAN_5);
+		ScriptCall("mkACSUtil","MarkLocked");
 	}
 	return false;
 }
@@ -1472,7 +1477,8 @@ SCRIPT "DoorScript" ( int index )
 	Delay(35);
 	HudMessage(s:"A";HUDMSG_PLAIN,2,CR_UNTRANSLATED,160.0,120.0,0.0);
 	// Emulate load times
-	Delay(Random(80,120));
+	if ( GetCVar("sm_fakeload") ) Delay(Random(80,120));
+	else Delay(35);
 	SetActivator(oldtid);
 	DoorClose(index);
 	SetActivator(0,AAPTR_NULL);
@@ -1482,15 +1488,4 @@ SCRIPT "DoorScript" ( int index )
 	HudMessage(s:"A";HUDMSG_FADEOUT,2,CR_UNTRANSLATED,160.0,120.0,0.0,0.5);
 	ScriptCall("mkAmbMix","Unmute",0.5);
 	Delay(10);
-}
-
-// debug door scripts
-SCRIPT "DebugOpen" ( int index )
-{
-	DoorOpen(index);
-}
-
-SCRIPT "DebugClose" ( int index )
-{
-	DoorClose(index);
 }

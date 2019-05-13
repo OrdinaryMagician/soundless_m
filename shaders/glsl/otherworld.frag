@@ -8,23 +8,32 @@
 void main()
 {
 	vec2 coord = TexCoord;
-	vec2 px = 1.0/max(OMINSCALE,textureSize(InputTexture,0)*OSCALE);
+	vec2 px;
+	if ( dolow == 1 ) px = 1.0/max(OMINSCALE,textureSize(InputTexture,0)*OSCALE);
+	else px = 1.0/textureSize(InputTexture,0);
 	vec2 nc;
 	vec4 base = texture(InputTexture,coord);
-	vec4 res = OBASE*base;
-	float cnt = OBASE;
-	int i, j;
-	for ( j=-ORAD; j<=ORAD; j++ ) for ( i=-ORAD; i<=ORAD; i++ )
+	vec4 res = base;
+	if ( doblur == 1 )
 	{
-		nc = coord+px*vec2(i,j);
-		if ( (nc.x >= 0.0) && (nc.x < 1.0) && (nc.y >= 0.0) && (nc.y < 1.0) )
+		res *= OBASE;
+		float cnt = OBASE;
+		int i, j;
+		for ( j=-ORAD; j<=ORAD; j++ ) for ( i=-ORAD; i<=ORAD; i++ )
 		{
-			res += texture(InputTexture,nc);
-			cnt += 1.0;
+			nc = coord+px*vec2(i,j);
+			if ( (nc.x >= 0.0) && (nc.x < 1.0) && (nc.y >= 0.0) && (nc.y < 1.0) )
+			{
+				res += texture(InputTexture,nc);
+				cnt += 1.0;
+			}
 		}
+		res /= cnt;
 	}
-	res /= cnt;
-	res.rgb *= OMUL;
-	res.rgb = pow(res.rgb,OPOW);
+	if ( dotint == 1 )
+	{
+		res.rgb *= OMUL;
+		res.rgb = pow(res.rgb,OPOW);
+	}
 	FragColor = mix(base,res,blend);
 }

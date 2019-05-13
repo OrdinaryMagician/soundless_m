@@ -1,0 +1,17 @@
+LOCK 240
+{
+	DummyKey
+	MapColor 192 160 0
+}
+
+LOCK 241
+{
+	DummyKey
+	MapColor 192 0 0
+}
+
+LOCK 242
+{
+	DummyKey
+	MapColor 64 64 128
+}

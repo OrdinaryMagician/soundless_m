@@ -72,7 +72,7 @@ Class mkCritter : Actor abstract
 	action void A_StartWander()
 	{
 		invoker.searchtime = Random[Critter](invoker.minsearch,invoker.maxsearch);
-		if ( (invoker.lastheard || LookForPlayers(false,invoker.viewparams)) && ResolveState("Chase") )
+		if ( (LookForPlayers(false,invoker.viewparams) || invoker.lastheard) && ResolveState("Chase") )
 		{
 			// don't answer to noises if we only heard things
 			if ( bAMBUSH && !invoker.target ) return;
@@ -307,7 +307,7 @@ Class mkCritter1 : mkCritter
 		Height 40;
 		Speed 8;
 		Mass 80;
-		MeleeRange 40;
+		MeleeRange 30;
 		SeeSound "critter1/see";
 		ActiveSound "critter1/active";
 		PainSound "critter1/pain";
@@ -395,7 +395,7 @@ Class mkCritter2 : mkCritter
 		Height 45;
 		Speed 6;
 		Mass 300;
-		MeleeRange 50;
+		MeleeRange 40;
 		SeeSound "critter2/see";
 		PainSound "critter2/pain";
 		DeathSound "critter2/pain";
@@ -494,14 +494,14 @@ Class mkCritter3 : mkCritter
 	{
 		//$Title Bruiser Critter
 		//$Category Enemies
-		Health 100;
+		Health 200;
 		PainChance 150;
 		Scale 0.9;
 		Radius 20;
 		Height 56;
-		Speed 5;
+		Speed 6;
 		Mass 500;
-		MeleeRange 60;
+		MeleeRange 50;
 		SeeSound "critter3/see";
 		PainSound "critter3/pain";
 		DeathSound "critter3/pain";
@@ -529,7 +529,7 @@ Class mkCritter3 : mkCritter
 	{
 		Super.Tick();
 		if ( InStateSequence(CurState,ResolveState("Charge")) ) speed = 12;
-		else speed = 5;
+		else speed = 6;
 	}
 
 	override bool SpecialBlastHandling( Actor source, double strength )
@@ -1029,7 +1029,7 @@ Class mkCritter4 : mkCritter
 		Vector2 fpos;
 		fpos = pos.xy+(cos(angle+50),sin(angle+50))*50;
 		Actor a;
-		int num = 4/invoker.HealthFact();
+		int num = 3/invoker.HealthFact();
 		for ( int i=0; i<num; i++ )
 		{
 			a = Spawn("mkFireball",(fpos.x,fpos.y,pos.z+16));
@@ -1233,7 +1233,7 @@ Class mkLurker : Actor
 	{
 		invoker.stepcount++;
 		if ( invoker.stepcount%50 ) return;
-		A_PlaySound("lurker/step",CHAN_BODY,0.3,attenuation:2.0);
+		A_PlaySound("lurker/step",CHAN_BODY,0.3,attenuation:3.0);
 	}
 	action void A_Lurk()
 	{
@@ -1316,6 +1316,7 @@ Class mkLurker : Actor
 	action void A_Attack()
 	{
 		target.DamageMobj(self,self,0x7fffffff,'Massacre');
+		target.vel *= 0;
 		A_FaceTarget();
 		target = null;
 		A_SetAngle(angle+180,SPF_INTERPOLATE);

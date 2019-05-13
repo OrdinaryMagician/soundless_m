@@ -50,8 +50,6 @@ void main()
 {
 	vec2 coord = TexCoord;
 	vec4 res = texture(InputTexture,coord);
-	vec2 sfact = max(vec2(320.0,200.0),textureSize(InputTexture,0)*0.5);
-	coord = floor(coord*sfact)/sfact;
 	res.rgb = grain(res.rgb,coord);
 	FragColor = res;
 }

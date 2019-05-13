@@ -3,16 +3,23 @@ Class ShaderHandler : EventHandler
 {
 	bool owenable;
 	double fadeval, fadespeed;
+	transient CVar dolow, dovig, dodither, dopos, dograin, doblur, dotint;
 
 	override void RenderOverlay( RenderEvent e )
 	{
 		PlayerInfo p = players[consoleplayer];
-		Shader.SetEnabled(p,"vignette",true);
+		Shader.SetEnabled(p,"vignette",dovig.GetBool());
 		Shader.SetEnabled(p,"otherworld",owenable);
-		Shader.SetEnabled(p,"grain",true);
+		Shader.SetUniform1f(p,"otherworld","blend",fadeval);
+		Shader.SetUniform1i(p,"otherworld","doblur",doblur.GetBool());
+		Shader.SetUniform1i(p,"otherworld","dotint",dotint.GetBool());
+		Shader.SetUniform1i(p,"otherworld","dolow",dolow.GetBool());
+		Shader.SetEnabled(p,"grain",dograin.GetBool());
 		Shader.SetUniform1f(p,"grain","Timer",(gametic+e.fractic)/35.0);
 		Shader.SetEnabled(p,"retro",true);
-		Shader.SetUniform1f(p,"otherworld","blend",fadeval);
+		Shader.SetUniform1i(p,"retro","dolow",dolow.GetBool());
+		Shader.SetUniform1i(p,"retro","dopos",dopos.GetBool());
+		Shader.SetUniform1i(p,"retro","dodither",dodither.GetBool());
 	}
 
 	override void WorldLoaded( WorldEvent e )
@@ -24,6 +31,13 @@ Class ShaderHandler : EventHandler
 
 	override void WorldTick()
 	{
+		if ( !dolow ) dolow = CVar.GetCVar('sm_lowres');
+		if ( !dovig ) dovig = CVar.GetCVar('sm_vignette');
+		if ( !dodither ) dodither = CVar.GetCVar('sm_dither');
+		if ( !dopos ) dopos = CVar.GetCVar('sm_posterize');
+		if ( !dograin ) dograin = CVar.GetCVar('sm_grain');
+		if ( !doblur ) doblur = CVar.GetCVar('sm_owblur');
+		if ( !dotint ) dotint = CVar.GetCVar('sm_owtint');
 		fadeval = clamp(fadeval+fadespeed,0.0,1.0);
 		if ( (fadeval >= 1.0) || (fadeval <= 0.0) ) fadespeed = 0.0;
 		if ( fadeval == 0.0 ) owenable = false;
@@ -40,12 +54,5 @@ Class ShaderHandler : EventHandler
 			sh.fadespeed = 0.0;
 			sh.fadeval = val?1.0:0.0;
 		}
-	}
-
-	// filter debug
-	override void NetworkProcess( ConsoleEvent e )
-	{
-		if ( !e.IsManual ) return;
-		if ( e.Name ~== "owfilter" ) owenable = e.Args[0];
 	}
 }

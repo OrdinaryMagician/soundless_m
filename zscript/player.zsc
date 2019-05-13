@@ -19,7 +19,8 @@ Class JohnDoe : DoomPlayer
 		Player.ForwardMove 0.3, 0.35;
 		Player.ViewBob 0.2;
 		Player.SideMove 0.25, 0.3;
-		Player.StartItem "";
+		Player.StartItem "DummyKey";
+		Player.UseRange 40;
 		BloodType "mkBlood";
 	}
 	void PlayFootstep( Actor onactor )
@@ -219,12 +220,28 @@ Class MapHandler : StaticEventHandler
 {
 	CVar tmap;
 	int lasttmap;
+	Line lastactivated;
 
 	override void WorldLoaded( WorldEvent e )
 	{
 		tmap = CVar.GetCVar('gl_tonemap',players[consoleplayer]);
 		lasttmap = -1;
 		if ( gamestate == GS_TITLELEVEL ) return;
+		// pre-mark all doorscript lines as "door" in the map
+		for ( int i=0; i<level.Lines.size(); i++ )
+		{
+			Line l = level.Lines[i];
+			if ( l.args[0] == -int('DoorScript') )
+				l.locknumber = 242;
+		}
+		// place all the room counters (excluding the first, since it's where we start)
+		for ( int i=1; i<51; i++ )
+		{
+			let c = Actor.Spawn("mkRoomCounter");
+			c.ChangeTID(1100+i);
+		}
+		level.found_secrets = 1;
+		level.total_secrets = 51;
 		// do not do the fadein if we haven't started a new session
 		// ("new session" as in an individual launch of gzdoom)
 		if ( CVar.GetCvar("sm_session").GetBool() ) return;
@@ -251,6 +268,11 @@ Class MapHandler : StaticEventHandler
 		}
 	}
 
+	override void WorldLinePreActivated( WorldEvent e )
+	{
+		if ( e.ActivatedLine.args[0] == -int('DoorScript') ) lastactivated = e.ActivatedLine;
+	}
+
 	override void WorldTick()
 	{
 		int curtmap = tmap.GetInt();
@@ -264,22 +286,6 @@ Class MapHandler : StaticEventHandler
 		// wavy camera for TITLEMAP
 		players[consoleplayer].mo.A_SetAngle(sin(gametic*0.233)*20.0,SPF_INTERPOLATE);
 		players[consoleplayer].mo.A_SetPitch(sin(gametic*0.124)*10.0,SPF_INTERPOLATE);
-	}
-
-	// some stuff for debugging
-	override void NetworkProcess( ConsoleEvent e )
-	{
-		if ( !e.IsManual ) return;
-		if ( e.Name ~== "mixstart" )
-			mkAmbMix.MixStart(String.Format("amb_%04d",e.Args[0]));
-		else if ( e.Name ~== "mixstop" )
-			mkAmbMix.MixStop(String.Format("amb_%04d",e.Args[0]));
-		else if ( e.Name ~== "mixstopall" )
-			mkAmbMix.MixStopAll();
-		else if ( e.Name ~== "mute" )
-			mkAmbMix.Mute();
-		else if ( e.Name ~== "unmute" )
-			mkAmbMix.Unmute();
 	}
 }
 
@@ -373,13 +379,13 @@ Class mkFlatSaveSquare : mkSaveSquare
 // I hope this isn't too much of a hack
 Class mkNote : Actor
 {
-	bool bActive;
+	bool bActive, bUsed;
 	Actor lastuser;
 
 	override bool Used( Actor user )
 	{
 		// non-players can't use this
-		if ( !user.player ) return false;
+		if ( !user || !user.player ) return false;
 		// make sure there's a line of sight so we don't get activated through walls
 		if ( !user.CheckSight(self) ) return false;
 		if ( !user.ACS_NamedExecute('Note',0,score) ) return false;
@@ -390,6 +396,12 @@ Class mkNote : Actor
 		}
 		bActive = true;
 		lastuser = user;
+		if ( !bUsed )
+		{
+			bUsed = true;
+			user.player.itemcount++;
+			level.found_items++;
+		}
 		return true;
 	}
 	override void Tick()
@@ -408,6 +420,8 @@ Class mkNote : Actor
 	{
 		Super.PostBeginPlay();
 		bActive = false;
+		bUsed = false;
+		level.total_items++;
 		// offset ourselves a bit
 		Vector3 dir;
 		if ( bFLATSPRITE )
@@ -755,5 +769,53 @@ Class mkACSUtil : Thinker
 			shovedir = (cos(aspot.angle),sin(aspot.angle));
 			bt.thing.vel += shovedir*4;
 		}
+	}
+
+	// marks door as locked
+	static void MarkLocked( Actor a )
+	{
+		Line last = MapHandler(StaticEventHandler.Find("MapHandler")).LastActivated;
+		if ( !last ) return;
+		last.locknumber = 240;
+	}
+	// unmarks locked door
+	static void MarkUnlocked( Actor a )
+	{
+		Line last = MapHandler(StaticEventHandler.Find("MapHandler")).LastActivated;
+		if ( !last ) return;
+		last.locknumber = 242;
+	}
+	// marks door as jammed
+	static void MarkJammed( Actor a )
+	{
+		Line last = MapHandler(StaticEventHandler.Find("MapHandler")).LastActivated;
+		if ( !last ) return;
+		last.locknumber = 241;
+	}
+}
+
+// Dummy key so marked doors can still be used
+Class DummyKey : Key
+{
+	Default
+	{
+		Inventory.InterHubAmount 1;
+	}
+}
+
+// Room counter
+Class mkRoomCounter : Actor
+{
+	Default
+	{
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+DONTSPLASH;
+	}
+	override void Activate( Actor activator )
+	{
+		if ( activator && activator.player ) activator.player.secretcount++;
+		level.found_secrets++;
+		Destroy();
 	}
 }

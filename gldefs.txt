@@ -35,13 +35,6 @@ Pointlight FlatSaveLight
 	size 25
 	offset 0 4 0
 }
-Pointlight FlashlightPickup
-{
-	color 1.0 0.875 0.625
-	size 100
-	offset 0 4 0
-	attenuate 1
-}
 HardwareShader PostProcess scene
 {
 	Name "vignette"
@@ -52,6 +45,9 @@ HardwareShader PostProcess scene
 {
 	Name "otherworld"
 	Uniform float blend
+	Uniform int dotint
+	Uniform int doblur
+	Uniform int dolow
 	Shader "shaders/glsl/otherworld.frag" 330
 }
 HardwareShader PostProcess scene
@@ -65,6 +61,9 @@ HardwareShader PostProcess scene
 {
 	Name "retro"
 	Shader "shaders/glsl/retro.frag" 330
+	Uniform int dolow
+	Uniform int dodither
+	Uniform int dopos
 	Texture DitherTexture "textures/dither.png"
 }
 // otherworld vibrating/bleeding textures

@@ -1,0 +1,12 @@
+A couple small bugs have been patched and some extra things have been added.
+
+- Knife and Crowbar can now directly activate their respective puzzles (GZDoom 3.3.2 addition).
+- Range of melee weapons has been reduced slightly.
+- Fixed AI routine of critters with AMBUSH (previously they wouldn't check sight until they heard a noise).
+- Copied Strife inventory behavior so items can be used with a single press.
+- Restored intended Crowbar crit behavior (squared damage).
+- Doubled health of Bruiser Critter so it's more of a threat.
+- Implemented easy mode, reduces enemy damage and health and adds more items.
+- Implemented hard mode, increased enemy damage and health and removes a couple items here and there.
+- Made shaders configurable.
+- Flashlight now uses a spotlight.

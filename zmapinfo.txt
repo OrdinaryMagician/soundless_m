@@ -3,22 +3,44 @@ gameinfo
 	PlayerClasses = "JohnDoe"
 	AddEventHandlers = "ShaderHandler", "MapHandler"
 	StatusbarClass = "mkStatBar"
+	MapArrow = "maparrows/playertri.txt"
 }
 
 clearskills
-skill default
+skill easy
 {
+	Name = "Easy"
+	SpawnFilter = 2
+	ACSReturn = 2
+	DamageFactor = 0.5
+	MonsterHealth = 0.75
+	MustConfirm = "For newcomers. Enemies will be much weaker and you will find more items to assist you."
+	DisableCheats
+}
+skill medium
+{
+	Name = "Normal"
 	SpawnFilter = 3
 	ACSReturn = 3
+	MustConfirm = "The way it's meant to be played."
 	DisableCheats
 	DefaultSkill
+}
+skill hard
+{
+	Name = "Hardcore"
+	SpawnFilter = 4
+	ACSReturn = 4
+	DamageFactor = 2.0
+	MonsterHealth = 1.5
+	MustConfirm = "If you seek a real challenge. Enemies will be much stronger and resources more scarce."
+	DisableCheats
 }
 
 clearepisodes
 episode APARTMNT
 {
 	Name = "$EPI_SM"
-	NoSkillMenu
 }
 
 map TITLEMAP lookup "HUSTR_TITLEMAP"
@@ -79,4 +101,33 @@ DoomEdNums
 	6024 = mkFlatNote
 	6025 = mkFogMaker
 	6026 = mkRainMaker
+}
+
+Automap
+{
+	Base = "Doom"
+	ShowLocks = true
+	Background = "80 80 80"
+	YourColor = "80 00 00"
+	WallColor = "00 00 00"
+	TwoSidedWallColor = "80 80 80"
+	FloorDiffWallColor = "60 60 60"
+	CeilingDiffWallColor = "60 60 60"
+	ExtraFloorWallColor = "60 60 60"
+	ThingColor = "00 00 00"
+	ThingColor_Item = "00 40 00"
+	ThingColor_CountItem = "00 40 00"
+	ThingColor_Monster = "40 00 00"
+	ThingColor_NocountMonster = "40 00 00"
+	ThingColor_Friend = "00 00 00"
+	SpecialWallColor = "00 80 80"
+	SecretWallColor = "00 00 00"
+	GridColor = "60 60 60"
+	XHairColor = "60 60 60"
+	NotSeenColor = "40 40 40"
+	LockedColor = "80 80 00"
+	IntraTeleportColor = "00 80 00"
+	InterTeleportColor = "00 80 00"
+	SecretSectorColor = "80 00 80"
+	AlmostBackgroundColor = "78 78 78"
 }

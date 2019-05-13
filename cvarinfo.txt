@@ -1,2 +1,10 @@
 server noarchive bool sm_session = false;
 server float sm_ambientvolume = 0.75;
+server bool sm_lowres = true;
+server bool sm_vignette = true;
+server bool sm_grain = true;
+server bool sm_dither = true;
+server bool sm_posterize = true;
+server bool sm_owblur = true;
+server bool sm_owtint = true;
+server bool sm_fakeload = true;

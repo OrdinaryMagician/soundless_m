@@ -78,3 +78,4 @@ PRESSKEY="PRESS ANY KEY";
 EPI_SM="Soundless Mound";
 HUSTR_TITLEMAP="Title Map";
 HUSTR_APARTMNT="Apartments";
+AM_ROOMS="Rooms";

@@ -7,5 +7,18 @@ AddOptionMenu "OptionsMenu"
 OptionMenu "SMOptionsMenu"
 {
 	Title "Soundless Mound Options"
+	StaticText "Sound Options"
 	Slider "Ambience Volume", "sm_ambientvolume", 0, 1, 0.05, 2
+	StaticText " "
+	StaticText "Gameplay Options"
+	Option "Fake Loading Times", "sm_fakeload", "YesNo"
+	StaticText " "
+	StaticText "Shader Options"
+	Option "Low Resolution", "sm_lowres", "YesNo"
+	Option "Vignette", "sm_vignette", "YesNo"
+	Option "Grain", "sm_grain", "YesNo"
+	Option "Dithering", "sm_dither", "YesNo"
+	Option "Posterization", "sm_posterize", "YesNo"
+	Option "Otherworld Blur", "sm_owblur", "YesNo"
+	Option "Otherworld Tint", "sm_owtint", "YesNo"
 }

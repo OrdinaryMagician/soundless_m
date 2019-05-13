@@ -8,11 +8,16 @@
 void main()
 {
 	vec2 coord = TexCoord;
-	vec2 sfact = max(DMINSCALE,textureSize(InputTexture,0)*DSCALE);
-	coord = (floor(coord*sfact)+0.5)/sfact;
+	vec2 sfact;
+	if ( dolow == 1 )
+	{
+		sfact = max(DMINSCALE,textureSize(InputTexture,0)*DSCALE);
+		coord = (floor(coord*sfact)+0.5)/sfact;
+	}
+	else sfact = textureSize(InputTexture,0);
 	vec4 res = texture(InputTexture,coord);
-	res.rgb = pow(res.rgb,vec3(DGAMMA));
-	res.rgb += DITHERSTR*texelFetch(DitherTexture,ivec2(coord*sfact)%ivec2(DITHERSZ,DITHERSZ),0).xxx;
-	res.rgb = floor(res.rgb*DLEVELS)/DLEVELS;
+	if ( dopos == 1 ) res.rgb = pow(res.rgb,vec3(DGAMMA));
+	if ( dodither == 1 ) res.rgb += DITHERSTR*texelFetch(DitherTexture,ivec2(coord*sfact)%ivec2(DITHERSZ,DITHERSZ),0).xxx;
+	if ( dopos == 1 ) res.rgb = floor(res.rgb*DLEVELS)/DLEVELS;
 	FragColor = res;
 }
