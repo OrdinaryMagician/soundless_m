@@ -28,6 +28,7 @@ Class mkCritter : Actor abstract
 	int deadtimer;
 	int minsearch, maxsearch;
 	bool muted;
+	int lastseesound;
 
 	Property StepSound: StepSound;
 	Property FeetDist: feetdist;
@@ -78,7 +79,9 @@ Class mkCritter : Actor abstract
 			if ( bAMBUSH && !invoker.target ) return;
 			bAMBUSH = false;
 			if ( !invoker.target ) invoker.target = invoker.lastheard;
-			A_PlaySound(SeeSound,CHAN_VOICE);
+			if ( invoker.lastseesound < (level.time-3) )
+				A_PlaySound(SeeSound,CHAN_VOICE);
+			invoker.lastseesound = level.time;
 			SetStateLabel("Chase");
 			return;
 		}
@@ -100,10 +103,12 @@ Class mkCritter : Actor abstract
 		if ( Random[CritterMove]() < 3 ) PlayActiveSound();
 		invoker.angle = invoker.wanderangle;
 		Vector2 dir = (cos(invoker.angle),sin(invoker.angle));
-		if ( (invoker.lastheard || LookForPlayers(false,invoker.viewparams)) && ResolveState("Chase") )
+		if ( (LookForPlayers(false,invoker.viewparams) || invoker.lastheard) && ResolveState("Chase") )
 		{
 			if ( !invoker.target ) invoker.target = invoker.lastheard;
-			A_PlaySound(SeeSound,CHAN_VOICE);
+			if ( invoker.lastseesound < (level.time-3) )
+				A_PlaySound(SeeSound,CHAN_VOICE);
+			invoker.lastseesound = level.time;
 			SetStateLabel("Chase");
 		}
 		else if ( !Warp(self,speed,flags:WARPF_TESTONLY) || (invoker.wandertimer-- <= 0) )
@@ -238,6 +243,7 @@ Class mkCritter : Actor abstract
 		chasetime = 0;
 		isdead = false;
 		deadtimer = 0;
+		lastseesound = -9999;
 	}
 
 	override void Tick()

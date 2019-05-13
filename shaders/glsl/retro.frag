@@ -1,6 +1,5 @@
 /* downscale, dither and posterization */
-#define DMINSCALE vec2(320.0,200.0)
-#define DSCALE 0.25
+#define DSCALE vec2(480.0,270.0)
 #define DGAMMA 0.85
 #define DLEVELS 32.0
 #define DITHERSZ 8
@@ -11,7 +10,7 @@ void main()
 	vec2 sfact;
 	if ( dolow == 1 )
 	{
-		sfact = max(DMINSCALE,textureSize(InputTexture,0)*DSCALE);
+		sfact = DSCALE;
 		coord = (floor(coord*sfact)+0.5)/sfact;
 	}
 	else sfact = textureSize(InputTexture,0);

@@ -216,6 +216,48 @@ Class mkDarklight : DynamicLight
 // gross hack token used to stop the save square acs during fadein from black
 Class LoadedGameToken : CustomInventory {}
 
+// another gross hack to preserve lock numbers between saves
+Class DoorStatus : Thinker
+{
+	Line d;
+	int locknumber;
+
+	DoorStatus Init( Line d )
+	{
+		ChangeStatNum(STAT_INFO);
+		self.d = d;
+		self.locknumber = 242;
+		return self;
+	}
+
+	static void SetDoorStatus( Line d, int locknumber )
+	{
+		let t = ThinkerIterator.Create("DoorStatus",STAT_INFO);
+		DoorStatus s;
+		while ( s = DoorStatus(t.Next()) )
+		{
+			if ( s.d != d ) continue;
+			s.locknumber = locknumber;
+			return;
+		}
+		s = new("DoorStatus").Init(d);
+		s.locknumber = locknumber;
+	}
+
+	static int GetDoorStatus( Line d )
+	{
+		let t = ThinkerIterator.Create("DoorStatus",STAT_INFO);
+		DoorStatus s;
+		while ( s = DoorStatus(t.Next()) )
+		{
+			if ( s.d != d ) continue;
+			return s.locknumber;
+		}
+		s = new("DoorStatus").Init(d);
+		return s.locknumber;
+	}
+}
+
 Class MapHandler : StaticEventHandler
 {
 	CVar tmap;
@@ -227,21 +269,37 @@ Class MapHandler : StaticEventHandler
 		tmap = CVar.GetCVar('gl_tonemap',players[consoleplayer]);
 		lasttmap = -1;
 		if ( gamestate == GS_TITLELEVEL ) return;
-		// pre-mark all doorscript lines as "door" in the map
-		for ( int i=0; i<level.Lines.size(); i++ )
+		if ( !e.IsSaveGame && !e.IsReOpen )
 		{
-			Line l = level.Lines[i];
-			if ( l.args[0] == -int('DoorScript') )
-				l.locknumber = 242;
+			// pre-mark all doorscript lines as "door" in the map
+			for ( int i=0; i<level.Lines.size(); i++ )
+			{
+				Line l = level.Lines[i];
+				if ( l.args[0] == -int('DoorScript') )
+				{
+					DoorStatus.SetDoorStatus(l,242);
+					l.locknumber = 242;
+				}
+			}
+			// place all the room counters (excluding the first, since it's where we start)
+			for ( int i=1; i<51; i++ )
+			{
+				let c = Actor.Spawn("mkRoomCounter");
+				c.ChangeTID(1100+i);
+			}
+			level.found_secrets = 1;
+			level.total_secrets = 51;
 		}
-		// place all the room counters (excluding the first, since it's where we start)
-		for ( int i=1; i<51; i++ )
+		else
 		{
-			let c = Actor.Spawn("mkRoomCounter");
-			c.ChangeTID(1100+i);
+			// re-set the door marks
+			for ( int i=0; i<level.Lines.size(); i++ )
+			{
+				Line l = level.Lines[i];
+				if ( l.args[0] == -int('DoorScript') )
+					l.locknumber = DoorStatus.GetDoorStatus(l);
+			}
 		}
-		level.found_secrets = 1;
-		level.total_secrets = 51;
 		// do not do the fadein if we haven't started a new session
 		// ("new session" as in an individual launch of gzdoom)
 		if ( CVar.GetCvar("sm_session").GetBool() ) return;
@@ -774,23 +832,29 @@ Class mkACSUtil : Thinker
 	// marks door as locked
 	static void MarkLocked( Actor a )
 	{
-		Line last = MapHandler(StaticEventHandler.Find("MapHandler")).LastActivated;
+		let mh = MapHandler(StaticEventHandler.Find("MapHandler"));
+		Line last = mh.LastActivated;
 		if ( !last ) return;
 		last.locknumber = 240;
+		DoorStatus.SetDoorStatus(last,240);
 	}
 	// unmarks locked door
 	static void MarkUnlocked( Actor a )
 	{
-		Line last = MapHandler(StaticEventHandler.Find("MapHandler")).LastActivated;
+		let mh = MapHandler(StaticEventHandler.Find("MapHandler"));
+		Line last = mh.LastActivated;
 		if ( !last ) return;
 		last.locknumber = 242;
+		DoorStatus.SetDoorStatus(last,242);
 	}
 	// marks door as jammed
 	static void MarkJammed( Actor a )
 	{
-		Line last = MapHandler(StaticEventHandler.Find("MapHandler")).LastActivated;
+		let mh = MapHandler(StaticEventHandler.Find("MapHandler"));
+		Line last = mh.LastActivated;
 		if ( !last ) return;
 		last.locknumber = 241;
+		DoorStatus.SetDoorStatus(last,241);
 	}
 }
 

@@ -1,5 +1,5 @@
 /* Complex grain shader ported over from MariENB */
-const float ni = 0.05;
+const float ni = 0.035;
 const float nf = 0.000005;
 const vec3 nm1 = vec3(2.05,3.11,2.22);
 const float nk = 0.04;

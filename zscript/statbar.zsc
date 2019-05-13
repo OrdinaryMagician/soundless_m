@@ -31,12 +31,12 @@ Class mkStatBar : BaseStatusBar
 		int hcol = Font.CR_GREEN;
 		if ( CurHealth < 50 ) hcol = Font.CR_GOLD;
 		else if ( CurHealth < 25 ) hcol = Font.CR_RED;
-		DrawString(mBaseFont,FormatNumber(CurHealth,3),(32,-15.5),DI_TEXT_ALIGN_RIGHT,hcol);
+		DrawString(mBaseFont,FormatNumber(CurHealth,3),(32,-16),DI_TEXT_ALIGN_RIGHT,hcol);
 		DrawImage("hpicon",(36,-16),DI_ITEM_LEFT_TOP);
 		Inventory CurAmmo = GetCurrentAmmo();
 		if ( CurAmmo )
 		{
-			DrawString(mBaseFont,FormatNumber(CurAmmo.Amount,3),(32,-27.5),DI_TEXT_ALIGN_RIGHT,Font.CR_WHITE);
+			DrawString(mBaseFont,FormatNumber(CurAmmo.Amount,3),(32,-28),DI_TEXT_ALIGN_RIGHT,Font.CR_WHITE);
 			DrawImage("amicon",(36,-28),DI_ITEM_LEFT_TOP);
 		}
 		CPlayer.inventorytics = 0;

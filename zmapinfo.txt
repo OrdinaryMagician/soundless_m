@@ -4,6 +4,8 @@ gameinfo
 	AddEventHandlers = "ShaderHandler", "MapHandler"
 	StatusbarClass = "mkStatBar"
 	MapArrow = "maparrows/playertri.txt"
+	Border = 0, 0, "nothing", "nothing", "nothing", "nothing", "nothing", "nothing", "nothing", "nothing"
+	BorderFlat = "blkness"
 }
 
 clearskills

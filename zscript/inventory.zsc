@@ -196,7 +196,7 @@ Class mkLight : DynamicLight
 				if ( !bt.Thing || !bt.Thing.bISMONSTER ) continue;
 				Vector3 aimdir = (cos(angle)*cos(pitch),sin(angle)*cos(pitch),-sin(pitch));
 				Vector3 reldir = Vec3To(bt.Thing).unit();
-				if ( acos(aimdir dot reldir) < 30 ) bt.Thing.LastHeard = target;
+				if ( (acos(aimdir dot reldir) < 30) && bt.Thing.CheckSight(target) ) bt.Thing.LastHeard = target;
 			}
 		}
 	}
@@ -425,7 +425,7 @@ Class mkKnifeWeapon : mkWeapon
 	}
 	action void A_KnifeAttack()
 	{
-		int dmg = Random[Knife](2,3)<<1;
+		int dmg = Random[Knife](2,3)**2;
 		dmg *= invoker.charge;
 		double ang = angle;
 		double pitch = AimLineAttack(ang,KNIFERANGE);

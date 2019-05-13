@@ -1,6 +1,5 @@
 /* otherworld filter */
-#define OMINSCALE vec2(320.0,200.0)
-#define OSCALE 0.25
+#define OSCALE vec2(480.0,270.0)
 #define OMUL vec3(1.19,0.94,0.87)
 #define OPOW vec3(0.81,0.99,1.17)
 #define OBASE 32.0
@@ -9,7 +8,7 @@ void main()
 {
 	vec2 coord = TexCoord;
 	vec2 px;
-	if ( dolow == 1 ) px = 1.0/max(OMINSCALE,textureSize(InputTexture,0)*OSCALE);
+	if ( dolow == 1 ) px = 1.0/OSCALE;
 	else px = 1.0/textureSize(InputTexture,0);
 	vec2 nc;
 	vec4 base = texture(InputTexture,coord);
