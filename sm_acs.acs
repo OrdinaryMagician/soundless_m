@@ -1,0 +1,1496 @@
+#library "sm_acs"
+#include "zcommon.acs"
+
+// door sound modes
+#define MODE_OPEN	0
+#define MODE_CLOSE	1
+#define MODE_LOCKED	2
+#define MODE_UNLOCK	3
+#define MODE_JAMMED	4
+
+// unlock status
+global int 1:keyused[];
+global int 2:initialized;
+global int 3:hassaved;
+
+int lastspot = -1;
+
+#define BASE_PTID 4000
+SCRIPT "AssignPlayer" ENTER
+{
+	Thing_ChangeTID(0,PlayerNumber()+4000);
+}
+
+SCRIPT "RespawnPlayer" RESPAWN
+{
+	if ( lastspot == -1 ) terminate;
+	ScriptCall("mkACSUtil","ForceMoveOnePlayer",lastspot);
+}
+
+// sequence for saving
+SCRIPT "SaveSquare" ( void )
+{
+	switch ( hassaved )
+	{
+	case 0:
+		Print(l:"FIRSTSAVE_1");
+		hassaved = 1;
+		break;
+	case 1:
+		Print(l:"FIRSTSAVE_2");
+		hassaved = 2;
+		break;
+	case 2:
+		Print(l:"FIRSTSAVE_3");
+		hassaved = 3;
+		break;
+	default:
+		Print(s:"");
+		ScriptCall("mkAmbMix","Mute",1.0);
+		PlaySound(0,"map/save",CHAN_5);
+		// make the fades global
+		int oldtid = ActivatorTID();
+		SetActivator(0,AAPTR_NULL);
+		SetHUDSize(320,240,true);
+		SetFont("RedFade");
+		HudMessage(s:"A";HUDMSG_FADEINOUT,1,CR_UNTRANSLATED,160.0,120.0,2.0,1.0,1.0);
+		SetActivator(oldtid);
+		Delay(35);
+		Autosave();
+		if ( CheckInventory("LoadedGameToken") )
+		{
+			StopSound(0,CHAN_5);
+			Delay(70);
+			break;
+		}
+		Delay(35);
+		ScriptCall("mkAmbMix","Unmute",1.0);
+		Delay(70);
+		break;
+	}
+}
+
+// sequence for fade in from black
+SCRIPT "JustLoaded" ( void )
+{
+	SetActivator(0,AAPTR_NULL);
+	SetPlayerProperty(true,on,PROP_TOTALLYFROZEN);
+	// the following guarantee that the save square effect is completely cancelled out
+	SetHUDSize(320,240,true);
+	SetFont("BlkFade");
+	HudMessage(s:"A";HUDMSG_PLAIN,1,CR_UNTRANSLATED,160.0,120.0,0.0);
+	Delay(3);
+	AmbientSound("map/load",127);
+	Delay(Random(80,140));
+	HudMessage(s:"A";HUDMSG_FADEOUT,1,CR_UNTRANSLATED,160.0,120.0,0.0,1.0);
+	TakeInventory("LoadedGameToken",1);
+	SetPlayerProperty(true,off,PROP_TOTALLYFROZEN);
+	ScriptCall("mkAmbMix","Unmute",0.5);
+}
+
+// code for notes
+int lastnote = -1;
+
+SCRIPT "LeaveNote" ( int index )
+{
+	if ( (index < 1) || (index > 11) )
+	{
+		Log(s:"Unhandled note index ",d:index,s:". Please contact the developer.");
+		terminate;
+	}
+	if ( lastnote != index ) terminate;
+	SetHudSize(320,200,FALSE);
+	str msgid = StrParam(s:"NOTE_",d:index);
+	lastnote = -1;
+	HudMessage(l:msgid;HUDMSG_FADEOUT,900,CR_UNTRANSLATED,160.0,100.0,0.0,1.0);
+}
+
+SCRIPT "Note" ( int index )
+{
+	if ( (index < 1) || (index > 11) )
+	{
+		Log(s:"Unhandled note index ",d:index,s:". Please contact the developer.");
+		terminate;
+	}
+	SetHudSize(320,200,FALSE);
+	str msgid = StrParam(s:"NOTE_",d:index);
+	if ( lastnote == index )
+	{
+		lastnote = -1;
+		HudMessage(l:msgid;HUDMSG_FADEOUT,900,CR_UNTRANSLATED,160.0,100.0,0.0,1.0);
+		Delay(35);
+	}
+	else
+	{
+		lastnote = index;
+		HudMessage(l:msgid;HUDMSG_FADEINOUT,900,CR_UNTRANSLATED,160.0,100.0,1.0,0.5,1.0);
+		PlaySound(0,"map/readnote",CHAN_5);
+		Delay(35);
+		HudMessage(l:msgid;HUDMSG_PLAIN,900,CR_UNTRANSLATED,160.0,100.0,0.0);
+	}
+}
+
+// setup code for all locked doors
+SCRIPT "SetupKeys" OPEN
+{
+	if ( initialized ) terminate;
+	initialized = 1;
+	for ( int i=0; i<8; i++ ) keyused[i] = 0;
+}
+
+// let the spaghetti code begin
+
+// play a door sound
+function void DoorSound( int type, int mode )
+{
+	str sndname;
+	switch ( mode )
+	{
+	case MODE_OPEN:
+		sndname = StrParam(s:"door/open",d:type);
+		break;
+	case MODE_CLOSE:
+		sndname = StrParam(s:"door/close",d:type);
+		break;
+	case MODE_LOCKED:
+		sndname = StrParam(s:"door/locked",d:type);
+		break;
+	case MODE_UNLOCK:
+		sndname = "door/unlock";
+		break;
+	case MODE_JAMMED:
+		sndname = StrParam(s:"door/jam",d:type);
+		break;
+	}
+	PlaySound(0,sndname,CHAN_5);
+}
+
+// print a generic door jammed message
+function void JammedMsg( void )
+{
+	str msgn = StrParam(s:"JAM_",d:Random(1,7));
+	Print(l:msgn);
+}
+
+// returns true if the door is unlocked
+// otherwise returns false after attempting to unlock it
+function bool IsUnlocked( int type, int key )
+{
+	str snd;
+	if ( (key < 1) || (key > 8) )
+	{
+		snd = StrParam(s:"door/locked",d:type);
+		Print(l:"LOCKMSG");
+		PlaySound(0,snd,CHAN_5);
+		return false;	// perma-locked
+	}
+	if ( keyused[key-1] ) return true;
+	str kclass = StrParam(s:"mkKey",d:key);
+	if ( CheckInventory(kclass) )
+	{
+		str kname = StrParam(s:"T_KEY",d:key);
+		Print(l:"KEYUSE_L",l:kname,l:"KEYUSE_R");
+		keyused[key-1] = 1;
+		PlaySound(0,"door/unlock",CHAN_5);
+		TakeInventory(kclass,1);
+	}
+	else
+	{
+		snd = StrParam(s:"door/locked",d:type);
+		Print(l:"LOCKMSG");
+		PlaySound(0,snd,CHAN_5);
+	}
+	return false;
+}
+
+// Main door open function
+// Contains all the door IDs used in the entire game
+// Handles door locks and deactivation of critters from the incoming room so
+// the player isn't interrupted mid-transition
+function bool DoorOpen( int index )
+{
+	bool exitstatus = false;
+	switch ( index )
+	{
+	// 1st hall -> street (perma-locked)
+	case 101:
+		IsUnlocked(2,0);
+		break;
+	// 1st hall -> room 101
+	case 102:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1100);
+		exitstatus = true;
+		break;
+	// room 101 -> 1st hall
+	case 103:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1101);
+		exitstatus = true;
+		break;
+	// 1st hall -> room 103
+	case 104:
+		if ( IsUnlocked(1,1) )
+		{
+			DoorSound(1,MODE_OPEN);
+			Thing_Deactivate(1100);
+			exitstatus = true;
+		}
+		break;
+	// room 103 -> 1st hall
+	case 105:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1102);
+		exitstatus = true;
+		break;
+	// 1st hall -> room 104
+	case 106:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1100);
+		exitstatus = true;
+		break;
+	// room 104 -> 1st hall
+	case 107:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1103);
+		exitstatus = true;
+		break;
+	// 1st hall -> room 107
+	case 108:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1100);
+		exitstatus = true;
+		break;
+	// room 107 -> 1st hall
+	case 109:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1104);
+		ACS_Terminate(103,0);
+		exitstatus = true;
+		break;
+	// 1st hall -> room 109
+	case 110:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1100);
+		exitstatus = true;
+		break;
+	// room 109 -> 1st hall
+	case 111:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1105);
+		exitstatus = true;
+		break;
+	// 1st hall -> stairs 1
+	case 112:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1100);
+		exitstatus = true;
+		break;
+	// stairs 1 -> 1st hall
+	case 113:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1106);
+		exitstatus = true;
+		break;
+	// 1st hall -> basement
+	case 114:
+		if ( IsUnlocked(4,2) )
+		{
+			DoorSound(4,MODE_OPEN);
+			Thing_Deactivate(1100);
+			exitstatus = true;
+		}
+		break;
+	// stairs 1 -> 2nd hall
+	case 115:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1106);
+		exitstatus = true;
+		break;
+	// 2nd hall -> stairs 1
+	case 116:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1108);
+		exitstatus = true;
+		break;
+	// 2nd hall -> stairs 2
+	case 117:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1108);
+		exitstatus = true;
+		break;
+	// stairs 2 -> 2nd hall
+	case 118:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1107);
+		ACS_Terminate(104,0);
+		exitstatus = true;
+		break;
+	// 2nd hall -> room 201
+	case 119:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1108);
+		exitstatus = true;
+		break;
+	// room 201 -> 2nd hall
+	case 120:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1109);
+		exitstatus = true;
+		break;
+	// 2nd hall -> room 202
+	case 121:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1108);
+		exitstatus = true;
+		break;
+	// room 202 -> 2nd hall
+	case 122:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1110);
+		exitstatus = true;
+		break;
+	// 2nd hall -> room 205
+	case 123:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1108);
+		exitstatus = true;
+		break;
+	// room 205 -> 2nd hall
+	case 124:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1111);
+		exitstatus = true;
+		break;
+	// 2nd hall -> room 206
+	case 125:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1108);
+		exitstatus = true;
+		break;
+	// room 206 -> 2nd hall
+	case 126:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1112);
+		exitstatus = true;
+		break;
+	// 2nd hall -> room 208
+	case 127:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1108);
+		exitstatus = true;
+		break;
+	// room 208 -> 2nd hall
+	case 128:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1113);
+		exitstatus = true;
+		break;
+	// 2nd hall -> room 210
+	case 129:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1108);
+		exitstatus = true;
+		break;
+	// room 210 -> 2nd hall
+	case 130:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1114);
+		exitstatus = true;
+		break;
+	// 2nd hall -> stairs 3
+	case 131:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1108);
+		exitstatus = true;
+		break;
+	// stairs 3 -> 2nd hall
+	case 132:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1115);
+		exitstatus = true;
+		break;
+	// stairs 3 -> 3rd hall
+	case 133:
+		if ( IsUnlocked(4,4) )
+		{
+			DoorSound(4,MODE_OPEN);
+			Thing_Deactivate(1115);
+			exitstatus = true;
+		}
+		break;
+	// 3rd hall -> stairs 3
+	case 134:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1116);
+		exitstatus = true;
+		break;
+	// 3rd hall -> storage 3
+	case 135:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1116);
+		exitstatus = true;
+		break;
+	// storage 3 -> 3rd hall
+	case 136:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1117);
+		exitstatus = true;
+		break;
+	// 3rd hall -> storage 5
+	case 137:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1116);
+		exitstatus = true;
+		break;
+	// storage 5 -> 3rd hall
+	case 138:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1118);
+		exitstatus = true;
+		break;
+	// basement -> 1st hall
+	case 139:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1119);
+		ACS_Execute(113,0,0);
+		exitstatus = true;
+		break;
+	// basement -> tunnel
+	case 140:
+		if ( IsUnlocked(4,3) )
+		{
+			DoorSound(2,MODE_OPEN);
+			Thing_Deactivate(1119);
+			exitstatus = true;
+		}
+		break;
+	// tunnel -> ow bsmnt
+	case 141:
+		DoorSound(2,MODE_OPEN);
+		Thing_Deactivate(1120);
+		exitstatus = true;
+		break;
+	// ow bsmnt -> ow 1st hall
+	case 142:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1121);
+		exitstatus = true;
+		break;
+	// ow 1st hall -> room 191
+	case 143:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1122);
+		exitstatus = true;
+		break;
+	// room 191 -> ow 1st hall
+	case 144:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1123);
+		exitstatus = true;
+		break;
+	// ow 1st hall -> room 838
+	case 145:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1122);
+		exitstatus = true;
+		break;
+	// ow 1st hall -> room 426
+	case 146:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1122);
+		exitstatus = true;
+		break;
+	// room 426 -> ow 1st hall
+	case 147:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1124);
+		exitstatus = true;
+		break;
+	// ow 1st hall -> room 742
+	case 148:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1122);
+		exitstatus = true;
+		break;
+	// room 742 -> ow 1st hall
+	case 149:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1125);
+		exitstatus = true;
+		break;
+	// ow 1st hall -> room 387
+	case 150:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1122);
+		exitstatus = true;
+		break;
+	// ow 1st hall -> room 101
+	case 151:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1122);
+		exitstatus = true;
+		break;
+	// room 101 -> ow 1st hall
+	case 152:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1126);
+		exitstatus = true;
+		break;
+	// room 426 -> room 624
+	case 153:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1124);
+		exitstatus = true;
+		break;
+	// room 624 -> room 426
+	case 154:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1127);
+		exitstatus = true;
+		break;
+	// room 624 -> ow 2nd hall
+	case 155:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1127);
+		exitstatus = true;
+		break;
+	// ow 2nd hall -> room 734
+	case 156:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1128);
+		exitstatus = true;
+		break;
+	// room 734 -> ow 2nd hall
+	case 157:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1129);
+		exitstatus = true;
+		break;
+	// ow 2nd hall -> room 300
+	case 158:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1128);
+		exitstatus = true;
+		break;
+	// room 300 -> ow 2nd hall
+	case 159:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1130);
+		exitstatus = true;
+		break;
+	// ow 2nd hall -> room 514
+	case 160:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1128);
+		exitstatus = true;
+		break;
+	// room 514 -> ow 2nd hall
+	case 161:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1131);
+		exitstatus = true;
+		break;
+	// ow 2nd hall -> rm 11421
+	case 162:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1128);
+		exitstatus = true;
+		break;
+	// rm 11421 -> ow 2nd hall
+	case 163:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1132);
+		exitstatus = true;
+		break;
+	// ow 2nd hall -> rm 6056
+	case 164:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1128);
+		exitstatus = true;
+		break;
+	// rm 6056 -> ow 2nd hall
+	case 165:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1133);
+		exitstatus = true;
+		break;
+	// ow 2nd hall -> room 213
+	case 166:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1128);
+		exitstatus = true;
+		break;
+	// room 213 -> ow 2nd hall
+	case 167:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1134);
+		exitstatus = true;
+		break;
+	// ow 2nd hall -> ow str 2
+	case 168:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1128);
+		exitstatus = true;
+		break;
+	// ow str 2 -> ow 2nd hall
+	case 169:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1135);
+		exitstatus = true;
+		break;
+	// ow str 2 -> ow str 3
+	case 170:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1135);
+		exitstatus = true;
+		break;
+	// ow str 3 -> ow 3rd hall
+	case 171:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1136);
+		exitstatus = true;
+		break;
+	// ow 3rd hall -> rm 99999
+	case 172:
+		if ( IsUnlocked(4,5) )
+		{
+			DoorSound(4,MODE_OPEN);
+			Thing_Deactivate(1137);
+			exitstatus = true;
+		}
+		break;
+	// rm 99999 -> rm 1 0528 5
+	case 173:
+		DoorSound(5,MODE_OPEN);
+		Thing_Deactivate(1138);
+		exitstatus = true;
+		break;
+	// rm 1 0528 5 -> rm 99999
+	case 174:
+		DoorSound(5,MODE_OPEN);
+		Thing_Deactivate(1139);
+		exitstatus = true;
+		break;
+	// rm 99999 -> rm 258 3571
+	case 175:
+		DoorSound(5,MODE_OPEN);
+		Thing_Deactivate(1138);
+		exitstatus = true;
+		break;
+	// rm 258 3571 -> rm 99999
+	case 176:
+		DoorSound(5,MODE_OPEN);
+		Thing_Deactivate(1140);
+		exitstatus = true;
+		break;
+	// rm 99999 -> room 0
+	case 177:
+		if ( IsUnlocked(5,6) )
+		{
+			DoorSound(5,MODE_OPEN);
+			Thing_Deactivate(1138);
+			exitstatus = true;
+		}
+		break;
+	// room 0 -> light in dark
+	case 178:
+		ACS_Execute(120,0);
+		if ( IsUnlocked(2,7) )
+		{
+			DoorSound(2,MODE_OPEN);
+			Thing_Deactivate(1141);
+			exitstatus = true;
+		}
+		break;
+	// r bsmt -> r 1st hall
+	case 179:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1143);
+		exitstatus = true;
+		break;
+	// r 1st hall -> r bsmt
+	case 180:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1144);
+		exitstatus = true;
+		break;
+	// r 1st hall -> r strs 2
+	case 181:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1144);
+		exitstatus = true;
+		break;
+	// r strs 2 -> r 1st hall
+	case 182:
+		DoorSound(4,MODE_OPEN);
+		Thing_Deactivate(1145);
+		exitstatus = true;
+		break;
+	// r 1st hall -> r rm 103
+	case 183:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1144);
+		exitstatus = true;
+		break;
+	// r rm 103 -> r 1st hall
+	case 184:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1146);
+		exitstatus = true;
+		break;
+	// r 1st hall -> r rm 106
+	case 185:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1144);
+		exitstatus = true;
+		break;
+	// r rm 106 -> r 1st hall
+	case 186:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1147);
+		exitstatus = true;
+		break;
+	// r 1st hall -> r rm 107
+	case 187:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1144);
+		exitstatus = true;
+		break;
+	// r rm 107 -> r 1st hall
+	case 188:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1148);
+		exitstatus = true;
+		break;
+	// r 1st hall -> r rm 109
+	case 189:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1144);
+		exitstatus = true;
+		break;
+	// r rm 109 -> r 1st hall
+	case 190:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1149);
+		exitstatus = true;
+		break;
+	// r 1st hall -> street
+	case 191:
+		if ( IsUnlocked(2,8) )
+		{
+			DoorSound(2,MODE_OPEN);
+			Thing_Deactivate(1144);
+			exitstatus = true;
+		}
+		break;
+	// street -> r 1st hall
+	case 192:
+		DoorSound(2,MODE_OPEN);
+		Thing_Deactivate(1150);
+		exitstatus = true;
+		break;
+	// jammed wood 1
+	case 800:
+		DoorSound(1,MODE_JAMMED);
+		JammedMsg();
+		break;
+	// jammed metal 1
+	case 801:
+		DoorSound(2,MODE_JAMMED);
+		JammedMsg();
+		break;
+	// jammed wood 2
+	case 802:
+		DoorSound(3,MODE_JAMMED);
+		JammedMsg();
+		break;
+	// jammed metal 2
+	case 803:
+		DoorSound(4,MODE_JAMMED);
+		JammedMsg();
+		break;
+	// jammed wood 3
+	case 804:
+		DoorSound(5,MODE_JAMMED);
+		JammedMsg();
+		break;
+	default:
+		Log(s:"Unhandled door index ",d:index,s:". Please contact the developer.");
+		break;
+	}
+	return exitstatus;
+}
+
+// Main door close function
+// "partner" to the door open function
+// Is called once the fake loading ends and mostly handles all the
+// ambience transitions and activation of monsters in the outgoing room
+function void DoorClose( int index )
+{
+	switch ( index )
+	{
+	// 1st hall -> room 101
+	case 102:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1101);
+		ScriptCall("mkAmbMix","MixStop","amb_0016");
+		ScriptCall("mkAmbMix","MixStart","amb_0006");
+		if ( !CheckFlag(11,"DORMANT") ) ScriptCall("mkAmbMix","MixStart","amb_0005");
+		break;
+	// room 101 -> 1st hall
+	case 103:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1100);
+		ScriptCall("mkAmbMix","MixStop","amb_0006");
+		if ( !CheckFlag(11,"DORMANT") ) ScriptCall("mkAmbMix","MixStop","amb_0005");
+		ScriptCall("mkAmbMix","MixStart","amb_0016");
+		break;
+	// 1st hall -> room 103
+	case 104:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1102);
+		ScriptCall("mkAmbMix","MixStop","amb_0016");
+		ScriptCall("mkAmbMix","MixStart","amb_0034");
+		break;
+	// room 103 -> 1st hall
+	case 105:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1100);
+		ScriptCall("mkAmbMix","MixStop","amb_0034");
+		ScriptCall("mkAmbMix","MixStart","amb_0016");
+		break;
+	// 1st hall -> room 104
+	case 106:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1103);
+		ScriptCall("mkAmbMix","MixStop","amb_0016");
+		ScriptCall("mkAmbMix","MixStart","amb_0006");
+		break;
+	// room 104 -> 1st hall
+	case 107:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1100);
+		ScriptCall("mkAmbMix","MixStop","amb_0006");
+		ScriptCall("mkAmbMix","MixStart","amb_0016");
+		break;
+	// 1st hall -> room 107
+	case 108:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1104);
+		ScriptCall("mkAmbMix","MixStop","amb_0016");
+		ACS_Execute(103,0);
+		break;
+	// room 107 -> 1st hall
+	case 109:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1100);
+		ScriptCall("mkAmbMix","MixStart","amb_0016");
+		break;
+	// 1st hall -> room 109
+	case 110:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1105);
+		ScriptCall("mkAmbMix","MixStop","amb_0016");
+		ScriptCall("mkAmbMix","MixStart","amb_0013");
+		break;
+	// room 109 -> 1st hall
+	case 111:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1100);
+		ScriptCall("mkAmbMix","MixStop","amb_0013");
+		ScriptCall("mkAmbMix","MixStart","amb_0016");
+		break;
+	// 1st hall -> stairs 1
+	case 112:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1106);
+		ScriptCall("mkAmbMix","MixStop","amb_0016");
+		break;
+	// stairs 1 -> 1st hall
+	case 113:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1100);
+		ScriptCall("mkAmbMix","MixStart","amb_0016");
+		break;
+	// 1st hall -> basement
+	case 114:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1119);
+		ScriptCall("mkAmbMix","MixStop","amb_0016");
+		ScriptCall("mkAmbMix","MixStart","amb_0038");
+		ACS_Execute(112,0);
+		break;
+	// stairs 1 -> 2nd hall
+	case 115:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1108);
+		ScriptCall("mkAmbMix","MixStart","amb_0036");
+		break;
+	// 2nd hall -> stairs 1
+	case 116:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1106);
+		ScriptCall("mkAmbMix","MixStop","amb_0036");
+		break;
+	// 2nd hall -> stairs 2
+	case 117:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1107);
+		ScriptCall("mkAmbMix","MixStop","amb_0036");
+		ACS_Execute(104,0);
+		break;
+	// stairs 2 -> 2nd hall
+	case 118:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1108);
+		ScriptCall("mkAmbMix","MixStart","amb_0036");
+		break;
+	// 2nd hall -> room 201
+	case 119:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1109);
+		ScriptCall("mkAmbMix","MixStop","amb_0036");
+		ScriptCall("mkAmbMix","MixStart","amb_0002");
+		break;
+	// room 201 -> 2nd hall
+	case 120:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1108);
+		ScriptCall("mkAmbMix","MixStop","amb_0002");
+		ScriptCall("mkAmbMix","MixStart","amb_0036");
+		break;
+	// 2nd hall -> room 202
+	case 121:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1110);
+		ScriptCall("mkAmbMix","MixStop","amb_0036");
+		ScriptCall("mkAmbMix","MixStart","amb_0003");
+		break;
+	// room 202 -> 2nd hall
+	case 122:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1108);
+		ScriptCall("mkAmbMix","MixStop","amb_0003");
+		ScriptCall("mkAmbMix","MixStart","amb_0036");
+		break;
+	// 2nd hall -> room 205
+	case 123:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1111);
+		ScriptCall("mkAmbMix","MixStop","amb_0036");
+		ScriptCall("mkAmbMix","MixStart","amb_0006");
+		break;
+	// room 205 -> 2nd hall
+	case 124:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1108);
+		ScriptCall("mkAmbMix","MixStop","amb_0006");
+		ScriptCall("mkAmbMix","MixStart","amb_0036");
+		break;
+	// 2nd hall -> room 206
+	case 125:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1112);
+		ScriptCall("mkAmbMix","MixStop","amb_0036");
+		ScriptCall("mkAmbMix","MixStart","amb_0001");
+		break;
+	// room 206 -> 2nd hall
+	case 126:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1108);
+		ScriptCall("mkAmbMix","MixStop","amb_0001");
+		ScriptCall("mkAmbMix","MixStart","amb_0036");
+		break;
+	// 2nd hall -> room 208
+	case 127:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1113);
+		ScriptCall("mkAmbMix","MixStop","amb_0036");
+		ScriptCall("mkAmbMix","MixStart","amb_0002");
+		break;
+	// room 208 -> 2nd hall
+	case 128:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1108);
+		ScriptCall("mkAmbMix","MixStop","amb_0002");
+		ScriptCall("mkAmbMix","MixStart","amb_0036");
+		break;
+	// 2nd hall -> room 210
+	case 129:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1114);
+		ScriptCall("mkAmbMix","MixStop","amb_0036");
+		ScriptCall("mkAmbMix","MixStart","amb_0032");
+		break;
+	// room 210 -> 2nd hall
+	case 130:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1108);
+		ScriptCall("mkAmbMix","MixStop","amb_0032");
+		ScriptCall("mkAmbMix","MixStart","amb_0036");
+		break;
+	// 2nd hall -> stairs 3
+	case 131:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1115);
+		ScriptCall("mkAmbMix","MixStop","amb_0036");
+		ScriptCall("mkAmbMix","MixStart","amb_0017");
+		break;
+	// stairs 3 -> 2nd hall
+	case 132:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1108);
+		ScriptCall("mkAmbMix","MixStop","amb_0017");
+		ScriptCall("mkAmbMix","MixStart","amb_0036");
+		break;
+	// stairs 3 -> 3rd hall
+	case 133:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1116);
+		break;
+	// 3rd hall -> stairs 3
+	case 134:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1115);
+		break;
+	// 3rd hall -> storage 3
+	case 135:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1117);
+		ScriptCall("mkAmbMix","MixStop","amb_0017");
+		break;
+	// storage 3 -> 3rd hall
+	case 136:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1116);
+		ScriptCall("mkAmbMix","MixStart","amb_0017");
+		break;
+	// 3rd hall -> storage 5
+	case 137:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1118);
+		ScriptCall("mkAmbMix","MixStop","amb_0017");
+		break;
+	// storage 5 -> 3rd hall
+	case 138:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1116);
+		ScriptCall("mkAmbMix","MixStart","amb_0017");
+		break;
+	// basement -> 1st hall
+	case 139:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1100);
+		ScriptCall("mkAmbMix","MixStop","amb_0038");
+		ScriptCall("mkAmbMix","MixStart","amb_0016");
+		break;
+	// basement -> tunnel
+	case 140:
+		DoorSound(2,MODE_CLOSE);
+		Thing_Activate(1120);
+		ScriptCall("mkAmbMix","MixStop","amb_0038");
+		ACS_Execute(115,0);
+		break;
+	// tunnel -> ow bsmnt
+	case 141:
+		DoorSound(2,MODE_CLOSE);
+		Thing_Activate(1121);
+		ScriptCall("mkAmbMix","MixStop","map/sh_sirens");
+		ScriptCall("mkAmbMix","MixStart","amb_0025");
+		ScriptCall("ShaderHandler","OtherworldFilter",true);
+		break;
+	// ow bsmnt -> ow 1st hall
+	case 142:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1122);
+		ScriptCall("mkAmbMix","MixStop","amb_0025");
+		ScriptCall("mkAmbMix","MixStart","amb_0023");
+		break;
+	// ow 1st hall -> room 191
+	case 143:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1123);
+		ScriptCall("mkAmbMix","MixStop","amb_0023");
+		ScriptCall("mkAmbMix","MixStart","amb_0024");
+		break;
+	// room 191 -> ow 1st hall
+	case 144:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1122);
+		ScriptCall("mkAmbMix","MixStop","amb_0024");
+		ScriptCall("mkAmbMix","MixStart","amb_0023");
+		break;
+	// ow 1st hall -> room 838
+	case 145:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1122);
+		break;
+	// ow 1st hall -> room 426
+	case 146:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1124);
+		ScriptCall("mkAmbMix","MixStop","amb_0023");
+		ScriptCall("mkAmbMix","MixStart","amb_0024");
+		break;
+	// room 426 -> ow 1st hall
+	case 147:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1122);
+		ScriptCall("mkAmbMix","MixStop","amb_0024");
+		ScriptCall("mkAmbMix","MixStart","amb_0023");
+		break;
+	// ow 1st hall -> room 742
+	case 148:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1125);
+		ScriptCall("mkAmbMix","MixStop","amb_0023");
+		ScriptCall("mkAmbMix","MixStart","amb_0024");
+		break;
+	// room 742 -> ow 1st hall
+	case 149:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1122);
+		ScriptCall("mkAmbMix","MixStop","amb_0024");
+		ScriptCall("mkAmbMix","MixStart","amb_0023");
+		break;
+	// ow 1st hall -> room 387
+	case 150:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1122);
+		break;
+	// ow 1st hall -> room 101
+	case 151:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1126);
+		ScriptCall("mkAmbMix","MixStop","amb_0023");
+		ScriptCall("mkAmbMix","MixStart","amb_0030");
+		break;
+	// room 101 -> ow 1st hall
+	case 152:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1122);
+		ScriptCall("mkAmbMix","MixStop","amb_0030");
+		ScriptCall("mkAmbMix","MixStart","amb_0023");
+		break;
+	// room 426 -> room 624
+	case 153:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1127);
+		ScriptCall("mkAmbMix","MixStop","amb_0024");
+		ScriptCall("mkAmbMix","MixStart","amb_0022");
+		break;
+	// room 624 -> room 426
+	case 154:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1124);
+		ScriptCall("mkAmbMix","MixStop","amb_0022");
+		ScriptCall("mkAmbMix","MixStart","amb_0024");
+		break;
+	// room 624 -> ow 2nd hall
+	case 155:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1128);
+		ScriptCall("mkAmbMix","MixStop","amb_0022");
+		ScriptCall("mkAmbMix","MixStart","amb_0019");
+		break;
+	// ow 2nd hall -> room 734
+	case 156:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1129);
+		ScriptCall("mkAmbMix","MixStop","amb_0019");
+		ScriptCall("mkAmbMix","MixStart","amb_0014");
+		break;
+	// room 734 -> ow 2nd hall
+	case 157:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1128);
+		ScriptCall("mkAmbMix","MixStop","amb_0014");
+		ScriptCall("mkAmbMix","MixStart","amb_0019");
+		break;
+	// ow 2nd hall -> room 300
+	case 158:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1130);
+		ScriptCall("mkAmbMix","MixStop","amb_0019");
+		Sector_SetFade(36,0,0,0);
+		ScriptCall("ShaderHandler","OtherworldFilter",false);
+		break;
+	// room 300 -> ow 2nd hall
+	case 159:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1128);
+		ScriptCall("mkAmbMix","MixStart","amb_0019");
+		Sector_SetFade(36,32,8,4);
+		ScriptCall("ShaderHandler","OtherworldFilter",true);
+		break;
+	// ow 2nd hall -> room 514
+	case 160:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1131);
+		ScriptCall("mkAmbMix","MixStop","amb_0019");
+		ScriptCall("mkAmbMix","MixStart","amb_0037");
+		break;
+	// room 514 -> ow 2nd hall
+	case 161:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1128);
+		ScriptCall("mkAmbMix","MixStop","amb_0037");
+		ScriptCall("mkAmbMix","MixStart","amb_0019");
+		break;
+	// ow 2nd hall -> rm 11421
+	case 162:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1132);
+		ScriptCall("mkAmbMix","MixStop","amb_0019");
+		ScriptCall("mkAmbMix","MixStart","amb_0034");
+		break;
+	// rm 11421 -> ow 2nd hall
+	case 163:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1128);
+		ScriptCall("mkAmbMix","MixStop","amb_0034");
+		ScriptCall("mkAmbMix","MixStart","amb_0019");
+		break;
+	// ow 2nd hall -> rm 6056
+	case 164:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1133);
+		ScriptCall("mkAmbMix","MixStop","amb_0019");
+		ScriptCall("mkAmbMix","MixStart","amb_0030");
+		break;
+	// rm 6056 -> ow 2nd hall
+	case 165:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1128);
+		ScriptCall("mkAmbMix","MixStop","amb_0030");
+		ScriptCall("mkAmbMix","MixStart","amb_0019");
+		break;
+	// ow 2nd hall -> room 213
+	case 166:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1134);
+		ScriptCall("mkAmbMix","MixStop","amb_0019");
+		ScriptCall("mkAmbMix","MixStart","amb_0021");
+		break;
+	// room 213 -> ow 2nd hall
+	case 167:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1128);
+		ScriptCall("mkAmbMix","MixStop","amb_0021");
+		ScriptCall("mkAmbMix","MixStart","amb_0019");
+		break;
+	// ow 2nd hall -> ow str 2
+	case 168:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1135);
+		ScriptCall("mkAmbMix","MixStop","amb_0019");
+		ScriptCall("mkAmbMix","MixStart","amb_0039");
+		Sector_SetFade(36,0,0,0);
+		ScriptCall("ShaderHandler","OtherworldFilter",false);
+		break;
+	// ow str 2 -> ow 2nd hall
+	case 169:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1128);
+		ScriptCall("mkAmbMix","MixStop","amb_0039");
+		ScriptCall("mkAmbMix","MixStart","amb_0019");
+		Sector_SetFade(36,32,8,4);
+		ScriptCall("ShaderHandler","OtherworldFilter",true);
+		break;
+	// ow str 2 -> ow str 3
+	case 170:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1136);
+		ACS_Execute(118,0);
+		break;
+	// ow str 3 -> ow 3rd hall
+	case 171:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1137);
+		ACS_Execute(119,0);
+		break;
+	// ow 3rd hall -> rm 99999
+	case 172:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1138);
+		ScriptCall("mkAmbMix","MixStop","amb_0039");
+		ScriptCall("mkAmbMix","MixStart","amb_0000");
+		Sector_SetFade(36,16,24,32);
+		break;
+	// rm 99999 -> rm 1 0528 5
+	case 173:
+		DoorSound(5,MODE_CLOSE);
+		Thing_Activate(1139);
+		break;
+	// rm 1 0528 5 -> rm 99999
+	case 174:
+		DoorSound(5,MODE_CLOSE);
+		Thing_Activate(1138);
+		break;
+	// rm 99999 -> rm 258 3571
+	case 175:
+		DoorSound(5,MODE_CLOSE);
+		Thing_Activate(1140);
+		break;
+	// rm 258 3571 -> rm 99999
+	case 176:
+		DoorSound(5,MODE_CLOSE);
+		Thing_Activate(1138);
+		break;
+	// rm 99999 -> room 0
+	case 177:
+		DoorSound(5,MODE_CLOSE);
+		Thing_Activate(1141);
+		ScriptCall("mkAmbMix","MixStop","amb_0000");
+		ScriptCall("mkAmbMix","MixStart","amb_0032");
+		break;
+	// room 0 -> light in dark
+	case 178:
+		DoorSound(2,MODE_CLOSE);
+		Thing_Activate(1142);
+		ScriptCall("mkAmbMix","MixStop","amb_0030");
+		ScriptCall("ShaderHandler","OtherworldFilter",false);
+		ACS_Execute(121,0);
+		break;
+	// r bsmt -> r 1st hall
+	case 179:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1144);
+		ScriptCall("mkAmbMix","MixStop","amb_0011");
+		ScriptCall("mkAmbMix","MixStart","amb_0044");
+		break;
+	// r 1st hall -> r bsmt
+	case 180:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1143);
+		ScriptCall("mkAmbMix","MixStop","amb_0044");
+		ScriptCall("mkAmbMix","MixStart","amb_0011");
+		break;
+	// r 1st hall -> r strs 2
+	case 181:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1145);
+		break;
+	// r strs 2 -> r 1st hall
+	case 182:
+		DoorSound(4,MODE_CLOSE);
+		Thing_Activate(1144);
+		break;
+	// r 1st hall -> r rm 103
+	case 183:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1146);
+		break;
+	// r rm 103 -> r 1st hall
+	case 184:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1144);
+		break;
+	// r 1st hall -> r rm 106
+	case 185:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1147);
+		break;
+	// r rm 106 -> r 1st hall
+	case 186:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1144);
+		break;
+	// r 1st hall -> r rm 107
+	case 187:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1148);
+		break;
+	// r rm 107 -> r 1st hall
+	case 188:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1144);
+		break;
+	// r 1st hall -> r rm 109
+	case 189:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1149);
+		break;
+	// r rm 109 -> r 1st hall
+	case 190:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1144);
+		break;
+	// r 1st hall -> street
+	case 191:
+		DoorSound(2,MODE_CLOSE);
+		Thing_Activate(1150);
+		ScriptCall("mkAmbMix","MixStop","amb_0044");
+		ScriptCall("mkAmbMix","MixStart","amb_0043");
+		break;
+	// street -> r 1st hall
+	case 192:
+		DoorSound(2,MODE_CLOSE);
+		Thing_Activate(1144);
+		ScriptCall("mkAmbMix","MixStop","amb_0043");
+		ScriptCall("mkAmbMix","MixStart","amb_0044");
+		break;
+	default:
+		Log(s:"Unhandled door index ",d:index,s:". Please contact the developer.");
+		break;
+	}
+}
+
+// Main door handling script
+// Each door has an initial "open" sequence, followed by a fade to black, a
+// faked loading time, and then a close sequence while fading back in
+// This emulates how doors between rooms work in the Silent Hill series
+// As you can see from above, all the door indices are hardcoded into a massive
+// switch block. This is a very very very bad way of doing it and I hope that,
+// once this is over and I have time to polish this whole project, I can
+// replace most of this with a small zscript interface
+SCRIPT "DoorScript" ( int index )
+{
+	if ( !DoorOpen(index) )
+	{
+		Delay(10);
+		terminate;
+	}
+	if ( ThingCount(T_NONE,index+2000) < 1 )
+	{
+		Log(s:"No destination spot for door index ",d:index,s:". Please contact the developer.");
+		terminate;
+	}
+	// set the respawn spot
+	lastspot = index+2000;
+	// push obstacles away
+	ScriptCall("mkACSUtil","ClearSpot",index+2000);
+	SetPlayerProperty(true,on,PROP_TOTALLYFROZEN);
+	// make the fades global
+	int oldtid = ActivatorTID();
+	SetActivator(0,AAPTR_NULL);
+	SetHUDSize(320,240,true);
+	SetFont("BlkFade");
+	HudMessage(s:"A";HUDMSG_FADEINOUT,2,CR_UNTRANSLATED,160.0,120.0,1.0,1.0,1.0);
+	ScriptCall("mkAmbMix","Mute",0.5);
+	Delay(35);
+	HudMessage(s:"A";HUDMSG_PLAIN,2,CR_UNTRANSLATED,160.0,120.0,0.0);
+	// Emulate load times
+	Delay(Random(80,120));
+	SetActivator(oldtid);
+	DoorClose(index);
+	SetActivator(0,AAPTR_NULL);
+	ScriptCall("mkAmbMix","Mute",0.0);
+	SetPlayerProperty(true,off,PROP_TOTALLYFROZEN);
+	ScriptCall("mkACSUtil","ForceMovePlayers",index+2000);
+	HudMessage(s:"A";HUDMSG_FADEOUT,2,CR_UNTRANSLATED,160.0,120.0,0.0,0.5);
+	ScriptCall("mkAmbMix","Unmute",0.5);
+	Delay(10);
+}
+
+// debug door scripts
+SCRIPT "DebugOpen" ( int index )
+{
+	DoorOpen(index);
+}
+
+SCRIPT "DebugClose" ( int index )
+{
+	DoorClose(index);
+}

@@ -1,0 +1,86 @@
+FlickerLight2 PurpleFire
+{
+	color 0.25 0.0 0.25
+	size 80
+	secondarysize 90
+	interval 0.1
+	offset 0 16 0
+	attenuate 1
+}
+FlickerLight2 PurpleFire2
+{
+	color 1.0 0.0 1.0
+	size 100
+	secondarysize 110
+	interval 0.1
+	attenuate 1
+}
+FlickerLight2 PurpleFire3
+{
+	color 0.6 0.0 0.6
+	size 40
+	secondarysize 50
+	interval 0.1
+	attenuate 1
+}
+Pointlight SaveLight
+{
+	color 1.0 0.0 0.0
+	size 25
+	offset 0 6 0
+}
+Pointlight FlatSaveLight
+{
+	color 1.0 0.0 0.0
+	size 25
+	offset 0 4 0
+}
+Pointlight FlashlightPickup
+{
+	color 1.0 0.875 0.625
+	size 100
+	offset 0 4 0
+	attenuate 1
+}
+HardwareShader PostProcess scene
+{
+	Name "vignette"
+	Shader "shaders/glsl/vignette.frag" 330
+	Texture VignetteTexture "textures/vignette.png"
+}
+HardwareShader PostProcess scene
+{
+	Name "otherworld"
+	Uniform float blend
+	Shader "shaders/glsl/otherworld.frag" 330
+}
+HardwareShader PostProcess scene
+{
+	Name "grain"
+	Shader "shaders/glsl/grain.frag" 330
+	Uniform float Timer
+	Texture NoiseTexture "textures/rgbnoise.png"
+}
+HardwareShader PostProcess scene
+{
+	Name "retro"
+	Shader "shaders/glsl/retro.frag" 330
+	Texture DitherTexture "textures/dither.png"
+}
+// otherworld vibrating/bleeding textures
+HardwareShader Texture bleedtex
+{
+	Shader "shaders/glsl/bleedtex.frag" 330
+}
+HardwareShader Texture txo_0119
+{
+	Shader "shaders/glsl/redtex.frag" 330
+}
+HardwareShader Texture txo_0140
+{
+	Shader "shaders/glsl/redtex.frag" 330
+}
+HardwareShader Texture txo_0148
+{
+	Shader "shaders/glsl/redtex.frag" 330
+}

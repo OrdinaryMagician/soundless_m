@@ -1,0 +1,11 @@
+AddOptionMenu "OptionsMenu"
+{
+	StaticText " "
+	SubMenu "Soundless Mound Options", "SMOptionsMenu"
+}
+
+OptionMenu "SMOptionsMenu"
+{
+	Title "Soundless Mound Options"
+	Slider "Ambience Volume", "sm_ambientvolume", 0, 1, 0.05, 2
+}

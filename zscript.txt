@@ -1,0 +1,10 @@
+version "3.3"
+
+#include "zscript/mk_ambmix.zsc"
+#include "zscript/player.zsc"
+#include "zscript/inventory.zsc"
+#include "zscript/statbar.zsc"
+#include "zscript/enemy.zsc"
+#include "zscript/shaders.zsc"
+#include "zscript/blood.zsc"
+#include "zscript/mk_matrix.zsc"

@@ -1,0 +1,28 @@
+decal CrowbarCrack1
+{
+	pic BFGLITE1
+	x-scale 0.5
+	y-scale 0.5
+	shade "00 00 00"
+	randomflipx
+	randomflipy
+}
+
+decal CrowbarCrack2
+{
+	pic BFGLITE2
+	x-scale 0.5
+	y-scale 0.5
+	shade "00 00 00"
+	randomflipx
+	randomflipy
+}
+
+decalgroup CrowbarCrack
+{
+	CrowbarCrack1 1
+	CrowbarCrack2 1
+}
+
+Generator mkCrowbarWeapon	CrowbarCrack
+Generator mkPistolWeapon	BulletChip

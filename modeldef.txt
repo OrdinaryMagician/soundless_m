@@ -1,0 +1,9 @@
+Model mkBloodPool
+{
+	Path "models"
+	Model 0 "sheet.md3"
+	Skin 0 "blodpool.png"
+	Scale 64.0 64.0 1.0
+	Offset 0.0 0.0 0.01
+	Frame BLOD A 0 "frame1"
+}

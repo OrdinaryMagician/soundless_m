@@ -1,0 +1,51 @@
+// base handler for screen shaders
+Class ShaderHandler : EventHandler
+{
+	bool owenable;
+	double fadeval, fadespeed;
+
+	override void RenderOverlay( RenderEvent e )
+	{
+		PlayerInfo p = players[consoleplayer];
+		Shader.SetEnabled(p,"vignette",true);
+		Shader.SetEnabled(p,"otherworld",owenable);
+		Shader.SetEnabled(p,"grain",true);
+		Shader.SetUniform1f(p,"grain","Timer",(gametic+e.fractic)/35.0);
+		Shader.SetEnabled(p,"retro",true);
+		Shader.SetUniform1f(p,"otherworld","blend",fadeval);
+	}
+
+	override void WorldLoaded( WorldEvent e )
+	{
+		owenable = false;
+		fadeval = 0.0;
+		fadespeed = 0.0;
+	}
+
+	override void WorldTick()
+	{
+		fadeval = clamp(fadeval+fadespeed,0.0,1.0);
+		if ( (fadeval >= 1.0) || (fadeval <= 0.0) ) fadespeed = 0.0;
+		if ( fadeval == 0.0 ) owenable = false;
+	}
+
+	static void OtherworldFilter( bool val, double fade = 0.0 )
+	{
+		let sh = ShaderHandler(Find("ShaderHandler"));
+		if ( !sh ) return;
+		sh.owenable = val;
+		if ( fade != 0.0 ) sh.fadespeed = fade/Thinker.TICRATE;
+		else
+		{
+			sh.fadespeed = 0.0;
+			sh.fadeval = val?1.0:0.0;
+		}
+	}
+
+	// filter debug
+	override void NetworkProcess( ConsoleEvent e )
+	{
+		if ( !e.IsManual ) return;
+		if ( e.Name ~== "owfilter" ) owenable = e.Args[0];
+	}
+}

@@ -1,0 +1,20 @@
+// Standard VGA 8x8 font with gradient
+HWFONTSM
+{
+	SPACEWIDTH 8
+	TEMPLATE GSFNT%03d
+}
+
+// Standard VGA 9x16 font with gradient
+HWFONTBG
+{
+	SPACEWIDTH 9
+	TEMPLATE GFONT%03d
+}
+
+// Miniwi (4x8) with gradient
+HWFONTTY
+{
+	SPACEWIDTH 4
+	TEMPLATE GTFNT%03d
+}

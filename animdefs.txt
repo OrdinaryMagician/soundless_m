@@ -1,0 +1,10 @@
+texture static1
+	allowdecals
+	random
+	pic static1 tics 4
+	pic static2 tics 4
+	pic static3 tics 4
+	pic static4 tics 4
+
+warp2 texture tex_0163 0.3
+warp2 texture tex_0164 0.6

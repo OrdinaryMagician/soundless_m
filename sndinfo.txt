@@ -1,0 +1,215 @@
+// AMBIENCE CHANNELS
+
+// SH2
+amb_0000	amb_0000
+amb_0001	amb_0001
+amb_0002	amb_0002
+amb_0003	amb_0003
+amb_0005	amb_0005
+amb_0006	amb_0006
+amb_0011	amb_0011
+amb_0013	amb_0013
+amb_0014	amb_0014
+amb_0043	amb_0043
+amb_0044	amb_0044
+$pitchshift	amb_0000	0
+$pitchshift	amb_0001	0
+$pitchshift	amb_0002	0
+$pitchshift	amb_0003	0
+$pitchshift	amb_0005	0
+$pitchshift	amb_0006	0
+$pitchshift	amb_0011	0
+$pitchshift	amb_0013	0
+$pitchshift	amb_0014	0
+$pitchshift	amb_0043	0
+$pitchshift	amb_0044	0
+// SH3
+amb_0016	amb_0016
+amb_0017	amb_0017
+amb_0019	amb_0019
+amb_0021	amb_0021
+amb_0022	amb_0022
+amb_0023	amb_0023
+amb_0024	amb_0024
+amb_0025	amb_0025
+$pitchshift	amb_0015	0
+$pitchshift	amb_0016	0
+$pitchshift	amb_0017	0
+$pitchshift	amb_0018	0
+$pitchshift	amb_0019	0
+$pitchshift	amb_0020	0
+$pitchshift	amb_0021	0
+$pitchshift	amb_0022	0
+$pitchshift	amb_0023	0
+$pitchshift	amb_0024	0
+$pitchshift	amb_0025	0
+// SH4
+amb_0030	amb_0030
+amb_0032	amb_0032
+amb_0034	amb_0034
+amb_0036	amb_0036
+amb_0037	amb_0037
+amb_0038	amb_0038
+amb_0039	amb_0039
+amb_0040	amb_0040
+amb_0042	amb_0042
+$pitchshift	amb_0030	0
+$pitchshift	amb_0032	0
+$pitchshift	amb_0034	0
+$pitchshift	amb_0036	0
+$pitchshift	amb_0037	0
+$pitchshift	amb_0038	0
+$pitchshift	amb_0039	0
+$pitchshift	amb_0040	0
+$pitchshift	amb_0042	0
+
+// DOOR SOUNDS
+door/open1	doorope1
+door/open2	doorope2
+door/open3	doorope3
+door/open4	doorope4
+door/open5	doorope5
+door/jam1	doorjam1
+door/jam2	doorjam2
+door/jam3	doorjam3
+door/jam4	doorjam4
+door/jam5	doorjam5
+door/close1	doorcls1
+door/close2	doorcls2
+door/close3	doorcls3
+door/close4	doorcls4
+door/close5	doorcls5
+door/locked1	doorlok1
+door/locked2	doorlok2
+door/locked3	doorlok3
+door/locked4	doorlok4
+door/locked5	doorlok5
+door/unlock	doorunl
+
+// MISC. MAP SOUNDS
+map/save	save
+map/load	load
+map/breakwall	brkwall
+map/button	butan
+map/creak	creak
+map/knock	knock
+map/baby	ogodwat
+map/rattle	rattle
+map/readnote	readnote
+map/unscrew	screwoff
+map/sh_sirens	sh_siren
+map/static	static
+map/steps	steps
+map/stonemove	stonemov
+map/tunnel	tunnel
+map/whisper	whisper
+map/cutwires	cutwires
+map/metalmove	metalmov
+map/switch	switch
+map/biglock	biglock
+map/endgame	endgame
+$pitchshift	map/save	0
+$pitchshift	map/load	0
+$pitchshift	map/breakwal	0
+$pitchshift	map/button	0
+$pitchshift	map/creak	0
+$pitchshift	map/knock	0
+$pitchshift	map/baby	0
+$pitchshift	map/rattle	0
+$pitchshift	map/readnote	0
+$pitchshift	map/unscrew	0
+$pitchshift	map/sh_sirens	0
+$pitchshift	map/static	0
+$pitchshift	map/steps	0
+$pitchshift	map/stonemove	0
+$pitchshift	map/tunnel	0
+$pitchshift	map/whisper	0
+$pitchshift	map/cutwires	0
+$pitchshift	map/metalmove	0
+$pitchshift	map/switch	0
+$pitchshift	map/biglock	0
+$pitchshift	map/endgame	0
+
+// STEPS
+step/base	st_base
+step/blood	st_blood
+step/carpet	st_carpe
+step/dirt	st_dirt
+step/glass	st_glass
+step/grass	st_grass
+step/grate	st_grate
+step/metal	st_metl
+step/wet	st_wet
+step/wood	st_wood
+
+// ITEM SOUNDS
+item/pickup	itemget
+item/select	itemsel
+item/use	itemuse
+item/fail	itemfail
+knife/swing	knifsw1
+knife/swing2	knifsw2
+knife/hit	knifhit
+knife/wall	knifwall
+crowbar/swing	barswing
+crowbar/enemy	barflesh
+crowbar/wall	barwall
+pistol/fire	pisfire
+pistol/load	pisload
+pistol/empty	pisnoamo
+pistol/flesh	chunkhit
+pistol/wall1	impact1
+pistol/wall2	impact2
+pistol/casing	shell2
+pistol/clip	clipb
+melee/maxcharge maxcharg
+crowbar/crit	barcrit
+$pitchshift	item/pickup	0
+$pitchshift	item/select 	0
+$pitchshift	item/use	0
+$pitchshift	item/fail	0
+$random		pistol/wall	{ pistol/wall1 pistol/wall2 }
+$attenuation	pistol/wall	10.0
+$attenuation	pistol/casing	4.0
+$attenuation	pistol/clip	4.0
+$volume		pistol/casing	0.3
+$volume		pistol/clip	0.3
+
+// ENEMY SOUNDS
+critter1/active	crt1idle
+critter1/pain1	crt1pai1
+critter1/pain2	crt1pai2
+critter1/see	crt1sit
+critter1/step	crt1step
+critter2/active crt2idle
+critter2/attack	crt2atk
+critter2/pain	crt2pain
+critter2/step	crt2step
+critter3/active	crt3idle
+critter3/pain	crt3pain
+critter3/see	crt3sit
+critter3/step	crt3step
+critter4/active	crt4idle
+critter4/pain	crt4pain
+critter4/see	crt4sit
+critter4/step	crt4step
+$random		critter1/pain	{ critter1/pain1 critter1/pain2 }
+lurker/step1	lurk1
+lurker/step2	lurk2
+$random		lurker/step	{ lurker/step1 lurker/step2 }
+
+// GORE
+body/thump	thump
+gore/gib1	gib1
+gore/gib2	gib2
+gore/gib3	gib3
+gore/gib4	gib4
+gore/gib5	gib5
+gore/gibp1	gibp1
+gore/gibp2	gibp2
+gore/gibp3	gibp3
+gore/gibp4	gibp4
+gore/gibp5	gibp5
+blood/drop	bloddrop
+$random		gore/gib	{ gore/gib1 gore/gib2 gore/gib3 gore/gib4 gore/gib5 }
+$random		gore/gibp	{ gore/gibp1 gore/gibp2 gore/gibp3 gore/gibp4 gore/gibp5 }

@@ -1,0 +1,10 @@
+Scuba Steve - Knife sprites.
+JoeyTD - Angled pistol sprites.
+Xatrix Entertainment (Redneck Rampage) - Base crowbar sprites.
+Team Silent, Akira Yamaoka - Various assorted Silent Hill sounds.
+id Software - Original critter sprites.
+Epic Games - Gib and bullet sounds.
+ZZYZX - Slope alignment code.
+
+Textures were scavenged from random UT99 texture packs, so I have no idea who
+made all of them. Hit me up if you know.

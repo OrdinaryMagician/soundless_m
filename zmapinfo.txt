@@ -1,0 +1,82 @@
+gameinfo
+{
+	PlayerClasses = "JohnDoe"
+	AddEventHandlers = "ShaderHandler", "MapHandler"
+	StatusbarClass = "mkStatBar"
+}
+
+clearskills
+skill default
+{
+	SpawnFilter = 3
+	ACSReturn = 3
+	DisableCheats
+	DefaultSkill
+}
+
+clearepisodes
+episode APARTMNT
+{
+	Name = "$EPI_SM"
+	NoSkillMenu
+}
+
+map TITLEMAP lookup "HUSTR_TITLEMAP"
+{
+	EvenLighting
+	LightMode = 3
+	Sky1 = "NOSKY"
+	Music = "NOMUSIC"
+}
+
+map APARTMNT lookup "HUSTR_APARTMNT"
+{
+	Cluster = 0
+	Next = "EndTitle"
+	SecretNext = "EndTitle"
+	StrifeFallingDamage
+	Gravity = 1200
+	EvenLighting
+	NoJump
+	NoCrouch
+	LightMode = 3
+	Sky1 = "NOSKY"
+	Music = "NOMUSIC"
+	NoIntermission
+}
+
+DoomEdNums
+{
+	// weapons
+	6000 = mkKnife
+	6001 = mkCrowbar
+	6002 = mkPistol
+	// items
+	6003 = mkClip
+	6004 = mkStimpak
+	6005 = mkMedkit
+	6007 = mkFlashlight
+	// keys
+	6008 = mkKey1
+	6009 = mkKey2
+	6010 = mkKey3
+	6011 = mkKey4
+	6012 = mkKey5
+	6013 = mkKey6
+	6014 = mkKey7
+	6015 = mkKey8
+	// enemies
+	6016 = mkCritter1
+	6017 = mkCritter2
+	6018 = mkCritter3
+	6019 = mkCritter4
+	6020 = mkSummonSpot
+	6027 = mkLurker
+	// misc
+	6021 = mkSaveSquare
+	6022 = mkFlatSaveSquare
+	6023 = mkNote
+	6024 = mkFlatNote
+	6025 = mkFogMaker
+	6026 = mkRainMaker
+}

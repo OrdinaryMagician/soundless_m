@@ -1,0 +1,2 @@
+server noarchive bool sm_session = false;
+server float sm_ambientvolume = 0.75;

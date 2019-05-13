@@ -1,0 +1,9 @@
+:StoneMove
+	playuntildone	map/stonemove
+	nostopcutoff
+end
+
+:MetalMove
+	playuntildone	map/metalmove
+	nostopcutoff
+end

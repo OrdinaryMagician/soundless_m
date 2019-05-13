@@ -1,0 +1,1553 @@
+// Master class for items that can be picked up with use instead of touch
+Class mkInventory : Inventory abstract
+{
+	override void BeginPlay()
+	{
+		if ( GetClass() == "mkInventory" )
+			ThrowAbortException("Attempt to instantiate base class.");
+		else Super.BeginPlay();
+	}
+
+	override void Touch( Actor toucher )
+	{
+		// does nothing, these items can only be picked up through use
+	}
+
+	// handle pickup when player presses use, not when touched
+	override bool Used ( Actor user )
+	{
+		let player = user.player;
+		if ( !player ) return false;
+		bool localview = user.CheckLocalView(consoleplayer);
+		bool res;
+		[res, user] = CallTryPickup(user);
+		if ( !res ) return false;
+		// This is the only situation when a pickup flash should ever play.
+		if ( PickupFlash && !ShouldStay() ) Spawn(PickupFlash,pos,ALLOW_REPLACE);
+		if ( !bQuiet )
+		{
+			PrintPickupMessage(localview,PickupMessage());
+			PlayPickupSound(player.mo);
+			if ( !bNoScreenFlash ) player.bonuscount = BONUSADD;
+		}
+		DoPickupSpecial(user);
+		if ( bCountItem )
+		{
+			player.itemcount++;
+			level.found_items++;
+		}
+		if ( bCountSecret ) player.mo.GiveSecret(true,true);
+		for ( int i=0; i<MAXPLAYERS; i++ )
+		{
+			if ( players[i].Bot && (players[i].Bot.dest == self) )
+				players[i].Bot.dest = null;
+		}
+		return true;
+	}
+	Default
+	{
+		+COUNTITEM;
+	}
+}
+
+// standard silent hill flashlight
+Class mkFlashlight : mkInventory
+{
+	bool bActive, bBroken;
+	TextureID officon, onicon;
+	mkLight lt;
+
+	Default
+	{
+		//$Title Flashlight
+		//$Category Items
+		Radius 5;
+		Height 9;
+		Scale 0.5;
+		Tag "$T_FLASHLIGHT";
+		Inventory.MaxAmount 1;
+		+INVENTORY.INVBAR;
+		Inventory.PickupMessage "$P_FLASHLIGHT";
+		Inventory.PickupSound "item/pickup";
+	}
+
+	States
+	{
+	Spawn:
+		FLIT A 1 A_JumpIf(args[0],1);
+		Wait;
+		FLIT B 1 Light("FlashlightPickup") A_JumpIf(!args[0],"Spawn");
+		Wait;
+	}
+
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		bActive = args[0];
+		onicon = TexMan.CheckForTexture("FLITB0",TexMan.Type_Any);
+		officon = TexMan.CheckForTexture("FLITA0",TexMan.Type_Any);
+		Icon = officon;
+	}
+
+	override void AttachToOwner( Actor other )
+	{
+		Super.AttachToOwner(other);
+		bActive = args[0];
+		Icon = bActive?onicon:officon;
+		args[0] = false;
+		lt = mkLight(Spawn("mkLight"));
+		lt.target = other;
+		lt.master = self;
+	}
+
+	override void DetachFromOwner()
+	{
+		args[0] = bActive;
+		Icon = bActive?onicon:officon;
+		if ( lt ) lt.Destroy();
+	}
+
+	override bool Use( bool pickup )
+	{
+		if ( pickup ) return false;	// no autoactivate
+		if ( bBroken )
+		{
+			Owner.A_Print(StringTable.Localize("$LITE_FAIL"));
+			Owner.A_PlaySound("item/fail",CHAN_6);
+			return false;
+		}
+		bActive = !bActive;
+		Icon = bActive?onicon:officon;
+		Owner.A_PlaySound("item/use",CHAN_6);
+		return false;
+	}
+
+	static void ToggleBreak( bool val )
+	{
+		let t = ThinkerIterator.Create("mkFlashlight");
+		mkFlashlight l;
+		while ( l = mkFlashlight(t.Next()) )
+		{
+			l.bBroken = val;
+			l.bActive = false;
+			l.Icon = l.officon;
+		}
+	}
+}
+
+// the light
+Class mkLight : DynamicLight
+{
+	Default
+	{
+		DynamicLight.Type "Point";
+		+DynamicLight.ATTENUATE;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		args[LIGHT_RED] = 255;
+		args[LIGHT_GREEN] = 224;
+		args[LIGHT_BLUE] = 160;
+		args[LIGHT_INTENSITY] = 100;
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( !target || !master )
+		{
+			Destroy();
+			return;
+		}
+		SetOrigin(target.vec3Offset(0,0,target.player.viewheight),true);
+		bDORMANT = !mkFlashlight(master).bActive;
+		if ( !bDORMANT ) target.A_AlertMonsters(80);
+	}
+}
+
+// "proxy" item for selecting weapons from the inventory only
+Class mkWeaponGiver : mkInventory abstract
+{
+	string weap;
+
+	Property GiveWeapon: weap;
+
+	Default
+	{
+		Scale 0.65;
+		Inventory.MaxAmount 1;
+		Inventory.PickupSound "item/pickup";
+		+INVENTORY.INVBAR;
+	}
+	override bool Use( bool pickup )
+	{
+		if ( !Owner.player ) return false;
+		Owner.A_PlaySound("item/use",CHAN_6);
+		Weapon extweap = Weapon(Owner.FindInventory(weap));
+		if ( !extweap ) Owner.GiveInventory(weap,1);
+		extweap = Weapon(Owner.FindInventory(weap));
+		if ( Owner.player.ReadyWeapon == extweap ) Owner.player.PendingWeapon = null;
+		else Owner.player.PendingWeapon = extweap;
+		return false;
+	}
+	override void DetachFromOwner()
+	{
+		// remove weapon when dropped
+		Owner.TakeInventory(weap,1);
+	}
+	override void BeginPlay()
+	{
+		if ( GetClass() == "mkWeaponGiver" )
+			ThrowAbortException("Attempt to instantiate base class.");
+		else Super.BeginPlay();
+	}
+}
+
+// weapons themselves, cannot be dropped directly
+Class mkWeapon : DoomWeapon abstract
+{
+	double speedfact, holdspeedfact;
+
+	Property SpeedFactor: speedfact;
+	Property HoldSpeedFactor: holdspeedfact;
+
+	// generic function for "swing" mechanics, used by crowbar and pistol
+	action void A_Swing( double x = 0.0, double y = 0.0, double recoil = 0.0 )
+	{
+		A_SetPitch(pitch+y,SPF_INTERPOLATE);
+		A_SetAngle(angle+x,SPF_INTERPOLATE);
+		A_Recoil(recoil);
+	}
+	override double GetSpeedFactor()
+	{
+		double factor = 1.0;
+		if ( !Owner.player ) return factor;
+		if ( Owner.player.ReadyWeapon == self )
+		{
+			if ( !(Owner.player.weaponstate&WF_WEAPONBOBBING) || (Owner.player.cmd.buttons&BT_ATTACK) )
+				factor *= holdspeedfact;
+			else
+				factor *= speedfact;
+		}
+		return factor;
+	}
+	override void BeginPlay()
+	{
+		if ( GetClass() == "mkWeapon" )
+			ThrowAbortException("Attempt to instantiate base class.");
+		else Super.BeginPlay();
+	}
+	Default
+	{
+		Weapon.BobStyle "Alpha";
+		Weapon.BobSpeed 1.5;
+		Weapon.BobRangeX 1.5;
+		mkWeapon.SpeedFactor 1.0;
+		mkWeapon.HoldSpeedFactor 1.0;
+		+INVENTORY.UNDROPPABLE;
+		+INVENTORY.UNTOSSABLE;
+		+WEAPON.NOALERT;
+		+WEAPON.NO_AUTO_SWITCH;
+	}
+}
+
+// givers for weapons
+Class mkKnife : mkWeaponGiver
+{
+	Default
+	{
+		//$Title Knife
+		//$Category Items
+		Radius 8;
+		Height 4;
+		Tag "$T_KNIFE";
+		Inventory.PickupMessage "$P_KNIFE";
+		Inventory.Icon "KNFEA0";
+		mkWeaponGiver.GiveWeapon "mkKnifeWeapon";
+	}
+	States
+	{
+	Spawn:
+		KNFE A -1;
+		Stop;
+	}
+}
+Class mkCrowbar : mkWeaponGiver
+{
+	Default
+	{
+		//$Title Crowbar
+		//$Category Items
+		Radius 20;
+		Height 5;
+		Tag "$T_CROWBAR";
+		Inventory.PickupMessage "$P_CROWBAR";
+		Inventory.Icon "CBARB0";
+		mkWeaponGiver.GiveWeapon "mkCrowbarWeapon";
+	}
+	States
+	{
+	Spawn:
+		CBAR A -1;
+		Stop;
+	}
+}
+Class mkPistol : mkWeaponGiver
+{
+	Default
+	{
+		//$Title Pistol
+		//$Category Items
+		Radius 9;
+		Height 5;
+		Tag "$T_PISTOL";
+		Inventory.PickupMessage "$P_PISTOL";
+		Inventory.Icon "2PSTA0";
+		mkWeaponGiver.GiveWeapon "mkPistolWeapon";
+	}
+	States
+	{
+	Spawn:
+		2PST A -1;
+		Stop;
+	}
+}
+
+// it's a knife, you can cut things with it
+// this knife also has the added benefit of actually cutting wires, no need
+// for a specialized wire cutter. Soundless Mound is a more reasonable town
+// than Silent Hill when it comes to this logic, so it'll allow it
+Class mkKnifeWeapon : mkWeapon
+{
+	double charge;
+
+	Default
+	{
+		mkWeapon.SpeedFactor 0.9;
+		mkWeapon.HoldSpeedFactor 0.7;
+		+WEAPON.MELEEWEAPON;
+	}
+	action void A_KnifeAttack()
+	{
+		int dmg = Random[Knife](2,3)<<1;
+		dmg *= invoker.charge;
+		double ang = angle;
+		double pitch = AimLineAttack(ang,DEFMELEERANGE);
+		LineAttack(ang,DEFMELEERANGE,pitch,dmg,'Melee',"KnifePuff",LAF_ISMELEEATTACK);
+	}
+	action void A_KnifeSwing()
+	{
+		A_AlertMonsters(60);
+		if ( invoker.charge > 2. ) A_PlaySound("knife/swing2",CHAN_WEAPON);
+		else A_PlaySound("knife/swing",CHAN_WEAPON);
+	}
+	States
+	{
+	Ready:
+		KNFG A 1 { invoker.charge = 1.; A_WeaponReady(); }
+		Wait;
+	Fire:
+		KNFG B 2;
+		KNFG C 2 A_ReFire();
+		KNFG D 1 A_KnifeSwing();
+		KNFG EF 1 A_Recoil(-0.5);
+		KNFG G 1 A_KnifeAttack();
+		KNGH HI 1;
+		KNFG HGFEDB 2;
+		Goto Ready;
+	Hold:
+		KNFG C 2 { if ( invoker.charge < 2.4 ) { invoker.charge = min(invoker.charge+0.06,2.4); if ( invoker.charge >= 2.4 ) A_PlaySound("melee/maxcharge",CHAN_VOICE); } A_WeaponOffset(FRandom[Shake](-0.1,0.1)*(invoker.charge-1.),32.+FRandom[Shake](-0.1,0.1)*(invoker.charge-1.)); A_WeaponReady(WRF_NOFIRE|WRF_NOSWITCH); }
+		KNFG C 0 A_ReFire();
+		Goto Fire+2;
+	Select:
+		KNFG A 1 A_Raise(9);
+		Wait;
+	Deselect:
+		KNFG A 1 A_Lower(9);
+		Wait;
+	}
+}
+
+Class KnifePuff : Actor
+{
+	Default
+	{
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+NOEXTREMEDEATH;
+		+PUFFONACTORS;
+		SeeSound "knife/hit";
+		AttackSound "knife/wall";
+	}
+	action void A_Sparks()
+	{
+		// distance self from walls and planes
+		Vector3 adjusted = pos;
+		adjusted.xy += (cos(angle),sin(angle))*1;
+		if ( adjusted.z > (ceilingz-1) ) adjusted.z = ceilingz-1;
+		if ( adjusted.z < (floorz+1) ) adjusted.z = floorz+1;
+		SetOrigin(adjusted,false);
+		double ang, pt;
+		for ( int i=0; i<8; i++ )
+		{
+			let s = Spawn("mkSpark",pos);
+			ang = FRandom[Puff](0,360);
+			pt = FRandom[Puff](-90,90);
+			s.vel = (cos(pt)*cos(ang),cos(pt)*sin(ang),-sin(pt))*FRandom[Puff](2.0,4.0);
+		}
+	}
+	States
+	{
+	Spawn:
+		TNT1 A 1;
+		Stop;
+	Crash:
+		TNT1 A 1 A_Sparks();
+		Stop;
+	}
+}
+
+// It's a crowbar. Unlike most other videogame protagonists, John holds it the
+// "wrong" way. But as it turns out, holding it like this magically gives the
+// weapon more knockback power and allows for rare critical hits that square
+// the potential damage, up to a very rare chance of 972 points of damage on a
+// single fully charged swing.
+Class mkCrowbarWeapon : mkWeapon
+{
+	double charge;
+	bool crit;
+
+	Default
+	{
+		mkWeapon.SpeedFactor 0.7;
+		mkWeapon.HoldSpeedFactor 0.5;
+		+WEAPON.MELEEWEAPON;
+	}
+	action void A_CrowbarAttack()
+	{
+		FTranslatedLineTarget t;
+		int dmg = Random[Crowbar](6,9)*2;
+		if ( invoker.crit ) dmg = dmg<<1;	// theoretically, there's a 3.75% chance that a fully charged swing can deal 972 points of damage, that's pretty high
+		dmg *= invoker.charge;
+		double ang = angle;
+		double pitch = AimLineAttack(ang,DEFMELEERANGE*1.5);
+		if ( LineAttack(ang,DEFMELEERANGE*1.5,pitch,dmg,'Melee',"CrowbarPuff",LAF_ISMELEEATTACK,t) )
+		{
+			A_AlertMonsters(300);
+			if ( invoker.crit ) A_QuakeEx(3,3,3,15,0,60,"",QF_RELATIVE|QF_SCALEDOWN);
+			else A_QuakeEx(2,2,2,8,0,30,"",QF_RELATIVE|QF_SCALEDOWN);
+			Vector3 dir = (cos(angle)*dmg*20.,sin(angle)*dmg*20.,dmg*10.);
+			if ( t.linetarget && t.linetarget.SpecialBlastHandling(invoker,dir.length()) )
+			{
+				t.linetarget.vel = dir/t.linetarget.mass;
+				t.linetarget.bBlasted = true;
+			}
+		}
+		invoker.crit = false;
+	}
+	action void A_CrowbarSwing()
+	{
+		invoker.crit = (Random[Crowbar](1,100) <= 15);
+		A_AlertMonsters(120);
+		A_PlaySound("crowbar/swing",CHAN_WEAPON);
+		if ( invoker.crit ) A_PlaySound("crowbar/crit",CHAN_VOICE);
+	}
+	States
+	{
+	Ready:
+		CRWB A 1 { invoker.charge = 1.; A_WeaponReady(); }
+		Wait;
+	Fire:
+		CRWB BBCCDD 1 A_Swing(-1.0,1.0,0.2);
+		TNT1 A 10 A_ReFire();
+		CRWB EFGHI 1 A_Swing(invoker.charge,-3.0*invoker.charge,-0.4*invoker.charge);
+		CRWB J 1 { A_Swing(2.0*invoker.charge,0.0,-0.5*invoker.charge); A_CrowbarSwing(); }
+		CRWB KLM 1 A_Swing(2.0*invoker.charge,2.0*invoker.charge,-0.6*invoker.charge);
+		CRWB N 1 { A_Swing(1.5*invoker.charge,2.5*invoker.charge,-0.5*invoker.charge); A_CrowbarAttack(); }
+		CRWB OP 1 A_Swing(0.5*invoker.charge,3.5*invoker.charge,-0.4*invoker.charge);
+		TNT1 A 6 A_SetTics(6*invoker.charge*invoker.charge);
+		TNT1 A 0 A_ReFire();
+		CRWB DDCCBB 1 A_Swing(-1.5,-1.0,0.1);
+		Goto Ready;
+	Hold:
+		TNT1 A 0 { invoker.charge = 1.; }
+	KeepHold:
+		TNT1 A 0 { if ( invoker.charge < 3. ) { invoker.charge = min(invoker.charge+0.2,3.); if ( invoker.charge >= 3. ) A_PlaySound("melee/maxcharge",CHAN_VOICE); } }
+		TNT1 AAAAA 2 A_Swing(FRandom[Shake](-.5,.5)*(invoker.charge-1.),FRandom[Shake](-.5,.5)*(invoker.charge-1.));
+		TNT1 A 0 A_ReFire("KeepHold");
+		Goto Fire+8;
+	Select:
+		CRWB A 1 A_Raise(4);
+		Wait;
+	Deselect:
+		CRWB A 1 A_Lower(4);
+		Wait;
+	}
+}
+
+// junk that flies when a wall is hit hard
+Class mkJunk : Actor
+{
+	int deadtimer;
+	double rollvel;
+
+	Default
+	{
+		Radius 2;
+		Height 2;
+		+NOBLOCKMAP;
+		+ROLLSPRITE;
+		+ROLLCENTER;
+		+FORCEXYBILLBOARD;
+		+MISSILE;
+		+MOVEWITHSECTOR;
+		+THRUACTORS;
+		BounceType "Doom";
+		BounceFactor 0.3;
+		Gravity 0.7;
+		Scale 0.2;
+		Translation "0:255=#[96,96,96]";
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		deadtimer = 0;
+		rollvel = FRandom[Junk](10,30)*RandomPick[Junk](-1,1);
+		frame = Random[Junk](0,5);
+		scale *= Frandom[Junk](0.8,1.2);
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( InStateSequence(CurState,ResolveState("Death")) )
+		{
+			deadtimer++;
+			if ( deadtimer > 300 ) A_FadeOut(0.05);
+			return;
+		}
+	}
+	States
+	{
+	Spawn:
+		JUNK # 2 A_SetRoll(roll+rollvel);
+		Loop;
+	Bounce:
+		JUNK # 0 { rollvel = FRandom[Junk](10,30)*RandomPick[Junk](-1,1); }
+		Goto Spawn;
+	Death:
+		JUNK # -1 A_SetRoll(FRandom[Junk](-5,5)+RandomPick[Junk](0,180));
+		Stop;
+	}
+}
+
+// light from a spark
+// adapts itself to target's alpha
+Class mkSparkLight : DynamicLight
+{
+	Default
+	{
+		DynamicLight.Type "Point";
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		args[LIGHT_INTENSITY] = 4;
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( !target )
+		{
+			Destroy();
+			return;
+		}
+		args[LIGHT_RED] = 64*target.alpha;
+		args[LIGHT_GREEN] = 48*target.alpha;
+		args[LIGHT_BLUE] = 24*target.alpha;
+	}
+}
+
+// sparks that fly from hitting walls
+Class mkSpark : Actor
+{
+	Default
+	{
+		Radius 2;
+		Height 2;
+		+NOBLOCKMAP;
+		+FORCEXYBILLBOARD;
+		+MISSILE;
+		+MOVEWITHSECTOR;
+		+THRUACTORS;
+		BounceType "Doom";
+		BounceFactor 0.4;
+		Gravity 0.2;
+		Scale 0.2;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		let l = Spawn("mkSparkLight",pos);
+		l.target = self;
+	}
+	States
+	{
+	Spawn:
+		EMBR A 1 Bright A_FadeOut(0.01);
+		Wait;
+	Death:
+		EMBR A 1 Bright A_FadeOut(0.05);
+		Wait;
+	}
+}
+
+// a small puff of dust
+Class LesserPuff : Actor
+{
+	Default
+	{
+		Radius 2;
+		Height 2;
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+DONTSPLASH;
+		+FORCEXYBILLBOARD;
+		+THRUACTORS;
+		+RANDOMIZE;
+		BounceType "Hexen";
+		BounceFactor 1.0;
+		WallBounceFactor 1.0;
+		Scale 0.5;
+	}
+
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		double ang, pt;
+		scale *= FRandom[Puff](0.5,1.0);
+		alpha *= FRandom[Puff](0.5,1.0);
+		ang = FRandom[Puff](0,360);
+		pt = FRandom[Puff](-90,90);
+		vel = (cos(pt)*cos(ang),cos(pt)*sin(ang),-sin(pt))*FRandom[Puff](0.2,0.8);
+		int jumps = Random[Puff](0,19);
+		state dest = ResolveState("Spawn");
+		for ( int i=0; i<jumps; i++ ) dest = dest.NextState;
+		SetState(dest);
+	}
+	States
+	{
+	Spawn:
+		DUST ABCDEFGHIJKLMNOPQRST 4 { A_FadeOut(0.04); vel *= 0.95; }
+		Loop;
+	}
+}
+
+// common class for flatsprites that serve as plane decals, since gzdoom
+// currently lacks those
+Class mkFlatDecal : Actor abstract
+{
+	const PROJECTDIST = 8.0;
+
+	Default
+	{
+		Radius 0.1;
+		Height 0;
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+DONTSPLASH;
+		+MOVEWITHSECTOR;
+		+FLATSPRITE;
+		+ROLLSPRITE;
+		+NOINTERACTION;
+		RenderStyle "Shaded";
+		StencilColor "00 00 00";
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		if ( abs(pos.z-floorz) <= PROJECTDIST )
+		{
+			SetOrigin((pos.x,pos.y,floorz),false);
+			SetToSlope(CurSector.floorplane.Normal,FRandom[Decal](0,360));
+		}
+		else if ( abs(pos.z-ceilingz) <= PROJECTDIST )
+		{
+			SetOrigin((pos.x,pos.y,ceilingz),false);
+			SetToSlope(CurSector.ceilingplane.Normal,FRandom[Decal](0,360));
+		}
+		else Destroy();
+	}
+	override void BeginPlay()
+	{
+		if ( GetClass() == "mkFlatDecal" )
+			ThrowAbortException("Attempt to instantiate base class.");
+		else Super.BeginPlay();
+	}
+	void SetToSlope( Vector3 fnormal, double dang )
+	{
+		vector2 fnormalp1 = ((fnormal.x != 0) || (fnormal.y != 0))?(fnormal.x,fnormal.y).Unit():(0,0);
+		vector2 fnormalp2 = ((fnormal.x,fnormal.y).Length(),fnormal.z);
+		double fang = atan2(fnormalp1.y,fnormalp1.x); // floor angle (not pitch!)
+		double fpitch = atan2(fnormalp2.x,fnormalp2.y); // floor pitch
+		double ddiff1 = cos(fang-(dang-90));
+		double ddiff2 = cos(fang-dang);
+		pitch = -fpitch*ddiff2;
+		roll = fpitch*ddiff1;
+		angle = dang;
+	}
+	States
+	{
+	Spawn:
+		#### # -1;
+		Stop;
+	Dummy:
+		FCBR AB 0;
+		FCHP ABCDE 0;
+		Stop;
+	}
+}
+
+// a crack on the floor
+Class mkCrowbarDecal : mkFlatDecal
+{
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		scale.x = FRandomPick[Decal](-0.5,0.5);
+		scale.y = FRandomPick[Decal](-0.5,0.5);
+		sprite = GetSpriteIndex('FCBR');
+		frame = Random[Decal](0,1);
+	}
+}
+
+// big puff of dust and debris
+Class CrowbarPuff : Actor
+{
+	Default
+	{
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+DONTSPLASH;
+		+NOEXTREMEDEATH;
+		+PUFFONACTORS;
+		SeeSound "crowbar/enemy";
+		AttackSound "crowbar/wall";
+	}
+	action void A_Debris()
+	{
+		Spawn("mkCrowbarDecal",pos);
+		// distance self from walls and planes
+		Vector3 adjusted = pos;
+		adjusted.xy += (cos(angle),sin(angle))*1;
+		if ( adjusted.z > (ceilingz-1) ) adjusted.z = ceilingz-1;
+		if ( adjusted.z < (floorz+1) ) adjusted.z = floorz+1;
+		SetOrigin(adjusted,false);
+		double ang, pt;
+		for ( int i=0; i<20; i++ )
+		{
+			let j = Spawn("mkJunk",pos);
+			ang = FRandom[Puff](0,360);
+			pt = FRandom[Puff](-90,90);
+			j.vel = (cos(pt)*cos(ang),cos(pt)*sin(ang),-sin(pt))*FRandom[Puff](5.0,10.0);
+		}
+		for ( int i=0; i<6; i++ )
+		{
+			let s = Spawn("mkSpark",pos);
+			ang = FRandom[Puff](0,360);
+			pt = FRandom[Puff](-90,90);
+			s.vel = (cos(pt)*cos(ang),cos(pt)*sin(ang),-sin(pt))*FRandom[Puff](2.0,4.0);
+		}
+	}
+	action void A_LesserPuffs()
+	{
+		for ( int i=0; i<10; i++ ) Spawn("LesserPuff",pos);
+	}
+	States
+	{
+	Spawn:
+	Melee:
+		TNT1 A 1;
+		Stop;
+	Crash:
+		TNT1 A 0 A_Debris();
+		TNT1 AAAA 4 A_LesserPuffs();
+		Stop;
+	}
+}
+
+Class SpawnableCrowbarPuff : CrowbarPuff
+{
+	States
+	{
+	Spawn:
+		TNT1 A 0 NoDelay { for ( int i=0; i<4; i++ ) A_Debris(); }
+		TNT1 AAAAAA 4 A_LesserPuffs();
+		Stop;
+	}
+}
+
+// ammo within the pistol's clip
+Class mkPistolAmmo : Ammo
+{
+	Default
+	{
+		Inventory.Amount 10;
+		Inventory.MaxAmount 10;
+	}
+}
+
+// light from firing the pistol, lasts 3 tics
+Class PistolLight : DynamicLight
+{
+	int timer;
+	Default
+	{
+		DynamicLight.Type "Point";
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		args[LIGHT_RED] = 255;
+		args[LIGHT_GREEN] = 192;
+		args[LIGHT_BLUE] = 128;
+		args[LIGHT_INTENSITY] = 200;
+		timer = 0;
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( !target )
+		{
+			Destroy();
+			return;
+		}
+		SetOrigin(target.vec3Offset(0,0,target.player.viewheight),true);
+		if ( timer++ > 2 ) Destroy();
+	}
+}
+
+// bullet hole
+Class mkPistolDecal : mkFlatDecal
+{
+	Default
+	{
+		Alpha 0.85;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		scale.x = FRandomPick[Decal](-0.5,0.5);
+		scale.y = FRandomPick[Decal](-0.5,0.5);
+		sprite = GetSpriteIndex('FCHP');
+		frame = Random[Decal](0,4);
+	}
+}
+
+// custom pistol puff
+Class mkPistolPuff : Actor
+{
+	Default
+	{
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+DONTSPLASH;
+		+NOEXTREMEDEATH;
+		+PUFFONACTORS;
+		+FORCEXYBILLBOARD;
+		SeeSound "pistol/flesh";
+		AttackSound "pistol/wall";
+		Scale 0.6;
+	}
+	action void A_SpawnJunk()
+	{
+		Spawn("mkPistolDecal",pos);
+		// distance self from walls and planes
+		Vector3 adjusted = pos;
+		adjusted.xy -= (cos(angle),sin(angle))*1;
+		if ( adjusted.z > (ceilingz-1) ) adjusted.z = ceilingz-1;
+		if ( adjusted.z < (floorz+1) ) adjusted.z = floorz+1;
+		SetOrigin(adjusted,false);
+		double ang, pt;
+		for ( int i=0; i<8; i++ )
+		{
+			let j = Spawn("mkJunk",pos);
+			ang = FRandom[Puff](0,360);
+			pt = FRandom[Puff](-90,90);
+			j.vel = (cos(pt)*cos(ang),cos(pt)*sin(ang),-sin(pt))*FRandom[Puff](3.0,8.0);
+			j.scale *= 0.5;
+		}
+		for ( int i=0; i<24; i++ )
+		{
+			let s = Spawn("mkSpark",pos);
+			ang = FRandom[Puff](0,360);
+			pt = FRandom[Puff](-90,90);
+			s.vel = (cos(pt)*cos(ang),cos(pt)*sin(ang),-sin(pt))*FRandom[Puff](2.0,4.0);
+		}
+	}
+	States
+	{
+	Spawn:
+	Melee:
+		TNT1 A 1;
+		Stop;
+	Crash:
+		QSM6 A 0 A_SpawnJunk();
+		QSM6 ABCDEFGHIJKLMNOPQRS 2;
+		Stop;
+	}
+}
+
+// a bullet casing, uses the sprite from old versions of Doom
+Class mkCasing : Actor
+{
+	int deadtimer;
+	double rollvel;
+
+	Default
+	{
+		Radius 2;
+		Height 2;
+		+NOBLOCKMAP;
+		+ROLLSPRITE;
+		+ROLLCENTER;
+		+FORCEXYBILLBOARD;
+		+MISSILE;
+		+MOVEWITHSECTOR;
+		+THRUACTORS;
+		BounceType "Doom";
+		BounceFactor 0.5;
+		BounceSound "pistol/casing";
+		Scale 0.12;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		deadtimer = 0;
+		rollvel = FRandom[Junk](20,80)*RandomPick[Junk](-1,1);
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( InStateSequence(CurState,ResolveState("Death")) )
+		{
+			deadtimer++;
+			if ( deadtimer > 300 ) A_FadeOut(0.05);
+			return;
+		}
+	}
+	States
+	{
+	Spawn:
+		PCAS A 2 A_SetRoll(roll+rollvel);
+		Loop;
+	Bounce:
+		PCAS A 0 { rollvel = FRandom[Junk](10,30)*RandomPick[Junk](-1,1); }
+		Goto Spawn;
+	Death:
+		PCAS A -1 A_SetRoll(FRandom[Junk](-5,5)+RandomPick[Junk](0,180));
+		Stop;
+	}
+}
+
+// an empty pistol clip
+Class mkSpentClip : Actor
+{
+	int deadtimer;
+	double rollvel;
+
+	Default
+	{
+		Radius 2;
+		Height 2;
+		+NOBLOCKMAP;
+		+ROLLSPRITE;
+		+ROLLCENTER;
+		+FORCEXYBILLBOARD;
+		+MISSILE;
+		+MOVEWITHSECTOR;
+		+THRUACTORS;
+		BounceType "Doom";
+		BounceFactor 0.4;
+		BounceSound "pistol/clip";
+		Scale 0.35;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		deadtimer = 0;
+		rollvel = FRandom[Junk](20,80)*RandomPick[Junk](-1,1);
+		double ang, pt;
+		ang = angle+FRandom[Puff](-90,90);
+		pt = FRandom[Puff](-15,30);
+		vel = (cos(pt)*cos(ang),cos(pt)*sin(ang),-sin(pt))*FRandom[Junk](3.0,6.0);
+
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( InStateSequence(CurState,ResolveState("Death")) )
+		{
+			deadtimer++;
+			if ( deadtimer > 300 ) A_FadeOut(0.05);
+			return;
+		}
+	}
+	States
+	{
+	Spawn:
+		CLIP B 2 A_SetRoll(roll+rollvel);
+		Loop;
+	Bounce:
+		CLIP B 0 { rollvel = FRandom[Junk](10,30)*RandomPick[Junk](-1,1); }
+		Goto Spawn;
+	Death:
+		CLIP B -1 A_SetRoll(FRandom[Junk](-5,5)+RandomPick[Junk](0,180));
+		Stop;
+	}
+}
+
+// a gun that shoots
+// clip holds 15 bullets
+// cannot have an extra 16th bullet in the chamber atm because I'm too lazy
+// to implement that
+Class mkPistolWeapon : mkWeapon
+{
+	Default
+	{
+		Weapon.AmmoGive 10;
+		Weapon.AmmoType "mkPistolAmmo";
+		Weapon.AmmoUse 1;
+		mkWeapon.SpeedFactor 0.8;
+		mkWeapon.HoldSpeedFactor 0.5;
+		+WEAPON.AMMO_OPTIONAL;
+	}
+	action bool ShouldReload()
+	{
+		Weapon weap = Weapon(invoker);
+		if ( weap && (weap.Ammo1.Amount <= 0) )
+			return true;
+		return false;
+	}
+	action bool CanReload()
+	{
+		Weapon weap = Weapon(invoker);
+		if ( weap && (weap.Ammo1.Amount < 10) && FindInventory("mkClip") )
+			return true;
+		return false;
+	}
+	action void A_DoReload()
+	{
+		Weapon weap = Weapon(invoker);
+		if ( !weap ) return;
+		mkClip clp = mkClip(FindInventory("mkClip"));
+		if ( !clp ) return;
+		clp.DoReload();
+	}
+	action void PistolShot( bool accurate, Class<Actor> pufftype, double pitch )
+	{
+		int damage = Random[Pistol](4,6)*3;
+		double ang = angle;
+		double pt = pitch;
+		if (!accurate)
+		{
+			ang += Random2[Pistol]()*(5.625/256);
+			pt += Random2[Pistol]()*(5.625/256);
+		}
+		LineAttack(ang,PLAYERMISSILERANGE,pt,damage,'Hitscan',pufftype);
+	}
+	action bool A_PistolAttack()
+	{
+		Weapon weap = Weapon(invoker);
+		if ( !weap ) return false;
+		if ( weap.Ammo1.Amount <= 0 )
+		{
+			A_AlertMonsters(200);
+			A_PlaySound("pistol/empty",CHAN_WEAPON);
+			return false;
+		}
+		if ( !weap.DepleteAmmo(weap.bAltFire,true,1) ) return false;
+		player.mo.PlayAttacking2();
+		let l = Spawn("PistolLight");
+		l.target = self;
+		A_AlertMonsters(2000);
+		A_PlaySound("pistol/fire",CHAN_WEAPON);
+		A_QuakeEx(3,3,3,4,0,30,"",QF_RELATIVE|QF_SCALEDOWN);
+		PistolShot(!player.refire,"mkPistolPuff",BulletSlope());
+		return true;
+	}
+	action void A_Eject()
+	{
+		Vector3 ofs = player.mo.pos+(0,0,player.viewheight);
+		Vector3 x, y, z;
+		[x, y, z] = Matrix4.getaxes(player.mo.pitch,player.mo.angle,player.mo.roll);
+		let c = Spawn("mkCasing",ofs+x*20+y*8.5-z*6.5);
+		c.vel = x*FRandom[Junk](0,2)+y*FRandom[Junk](5,8)+z*FRandom[Junk](3,6);
+	}
+	States
+	{
+	Ready:
+		2PIS A 1
+		{
+			if ( CanReload() && ShouldReload() ) return ResolveState("Reload");
+			A_WeaponReady(WRF_ALLOWRELOAD);
+			return ResolveState(null);
+		}
+		Wait;
+	Fire:
+		2PIS A 1;
+		2PIS A 0 { if ( A_PistolAttack() ) return ResolveState(null); return ResolveState("Empty"); }
+		2PIS B 1 Bright { A_Swing(-2.0,-2.0,1.0); }
+		2PIS CD 1 A_Swing(-0.6,-0.6,0.2);
+		2PIS E 0 A_Eject();
+		2PIS EEEE 1 A_Swing(-0.2,-0.2,0.1);
+		2PIS DDCCAA 1 A_Swing(1.0,1.0,-0.2);
+		2PIS A 0 A_ReFire();
+		Goto Ready;
+	Empty:
+		2PIS A 1 A_ReFire();
+		Goto Ready;
+	Hold:
+		2PIS A 1 A_WeaponReady(WRF_NOFIRE|WRF_NOSWITCH);
+		2PIS A 0 A_ReFire();
+		Goto Ready;
+	Reload:
+		TNT1 A 0 A_JumpIf(!CanReload(),"Ready");
+		2PIS AFGHIJK 2;
+		TNT1 A 25;
+		TNT1 A 30 A_DoReload();
+		2PIS KJIHGFA 2;
+		Goto Ready;
+	Select:
+		2PIS A 1 A_Raise(6);
+		Wait;
+	Deselect:
+		2PIS A 1 A_Lower(6);
+		Wait;
+	}
+}
+
+// one clip worth 10 bullets
+// they come in 10s exclusively and you can only drop full clips
+Class mkClip : mkInventory
+{
+	Default
+	{
+		//$Title Pistol Clip
+		//$Category Items
+		Radius 4;
+		Height 6;
+		Scale 0.35;
+		Tag "$T_CLIP";
+		Inventory.PickupMessage "$P_CLIP";
+		Inventory.PickupSound "item/pickup";
+		Inventory.Amount 10;
+		Inventory.MaxAmount 1000;
+		Inventory.Icon "CLIPA0";
+		+INVENTORY.INVBAR;
+	}
+	// clips can only be tossed in 10s
+	override Inventory CreateTossable ( int amt )
+	{
+		if ( !Owner || (Amount < 10) || (!amt%10) || (amt > Amount) ) return null;
+		if ( Amount == 10 )
+		{
+			BecomePickup();
+			DropTime = 30;
+			bSpecial = bSolid = false;
+			return self;
+		}
+		let copy = Inventory(Spawn(GetClass(),Owner.pos,NO_REPLACE));
+		if ( !copy ) return null;
+		amt = clamp(amt,10,Amount);
+		copy.MaxAmount = MaxAmount;
+		copy.Amount = amt;
+		copy.DropTime = 30;
+		copy.bSpecial = copy.bSolid = false;
+		Amount -= amt;
+		return copy;
+	}
+	override bool Use( bool pickup )
+	{
+		if ( pickup ) return false;
+		mkPistolWeapon pist = mkPistolWeapon(owner.player.readyweapon);
+		if ( pist && (owner.player.weaponstate&WF_WEAPONREADY) )
+		{
+			if ( pist.Ammo1.Amount < 10 )
+			{
+				owner.player.SetPSprite(PSP_WEAPON,pist.ResolveState("Reload"));
+				owner.A_PlaySound("item/use",CHAN_6);
+			}
+			else owner.A_PlaySound("item/fail",CHAN_6);
+		}
+		else if ( !pist ) DoReload(true);
+		else owner.A_PlaySound("item/fail",CHAN_6);
+		return false;
+	}
+	void DoReload( bool frominv = false )
+	{
+		mkPistolAmmo am = mkPistolAmmo(owner.FindInventory("mkPistolAmmo"));
+		if ( !am || (am.Amount >= 10) )
+		{
+			owner.A_PlaySound("item/fail",CHAN_6);
+			return;
+		}
+		int amo = min(amount,10-am.Amount);
+		am.Amount += amo;
+		amount -= amo;
+		if ( !frominv )
+		{
+			owner.A_AlertMonsters(60);
+			owner.A_PlaySound("pistol/load",CHAN_WEAPON);
+		}
+		else owner.A_PlaySound("item/use",CHAN_6);
+		let c = Spawn("mkSpentClip",owner.pos+(0,0,owner.height/2));
+		c.angle = owner.angle;
+		if ( amount <= 0 ) Destroy();
+	}
+	States
+	{
+	Spawn:
+		CLIP A -1;
+		Stop;
+	}
+}
+
+// master class for health pickups that can be picked up with use
+Class mkHealthPickup : HealthPickup abstract
+{
+	Default
+	{
+		Scale 0.65;
+		Inventory.PickupSound "item/pickup";
+		+INVENTORY.INVBAR;
+		+COUNTITEM;
+	}
+
+	// have to copy these over because we don't inherit from mkInventory
+	override void Touch( Actor toucher )
+	{
+		// does nothing, these items can only be picked up through use
+	}
+
+	// handle pickup when player presses use, not when touched
+	override bool Used ( Actor user )
+	{
+		let player = user.player;
+		if ( !player ) return false;
+		bool localview = user.CheckLocalView(consoleplayer);
+		bool res;
+		[res, user] = CallTryPickup(user);
+		if ( !res ) return false;
+		// This is the only situation when a pickup flash should ever play.
+		if ( PickupFlash && !ShouldStay() ) Spawn(PickupFlash,pos,ALLOW_REPLACE);
+		if ( !bQuiet )
+		{
+			PrintPickupMessage(localview,PickupMessage());
+			PlayPickupSound(player.mo);
+			if ( !bNoScreenFlash ) player.bonuscount = BONUSADD;
+		}
+		DoPickupSpecial(user);
+		if ( bCountItem )
+		{
+			player.itemcount++;
+			level.found_items++;
+		}
+		if ( bCountSecret ) player.mo.GiveSecret(true,true);
+		for ( int i=0; i<MAXPLAYERS; i++ )
+		{
+			if ( players[i].Bot && (players[i].Bot.dest == self) )
+				players[i].Bot.dest = null;
+		}
+		return true;
+	}
+
+	override bool Use (bool pickup)
+	{
+		if ( Owner.GiveBody(health,0) )
+		{
+			Owner.A_PlaySound("item/use",CHAN_6);
+			return true;
+		}
+		Owner.A_PlaySound("item/fail",CHAN_6);
+		return false;
+	}
+
+	override void BeginPlay()
+	{
+		if ( GetClass() == "mkHealthPickup" )
+			ThrowAbortException("Attempt to instantiate base class.");
+		else Super.BeginPlay();
+	}
+}
+
+// health drink that replaces the standard stimpak
+Class mkStimpak : mkHealthPickup
+{
+	Default
+	{
+		//$Title Health Drink
+		//$Category Items
+		Health 15;
+		Radius 8;
+		Height 4;
+		Tag "$T_STIMPAK";
+		Inventory.MaxAmount 1000;
+		Inventory.PickupMessage "$P_STIMPAK";
+		Inventory.Icon "STPAA0";
+	}
+	States
+	{
+	Spawn:
+		STPA A -1;
+		Stop;
+	}
+}
+
+// first aid kit that replaces the standard med(i)kit
+Class mkMedkit : mkHealthPickup
+{
+	Default
+	{
+		//$Title First Aid Kit
+		//$Category Items
+		Health 30;
+		Radius 13;
+		Height 8;
+		Tag "$T_MEDKIT";
+		Inventory.MaxAmount 1000;
+		Inventory.PickupMessage "$P_MEDKIT";
+		Inventory.Icon "MEDKA0";
+	}
+	States
+	{
+	Spawn:
+		MEDK A -1;
+		Stop;
+	}
+}
+
+// base class of all keys in soundless mound
+// they're slope-aligned flatsprites
+// cannot be dropped, as they're plot-important
+Class mkKey : mkInventory abstract
+{
+	string keydesc;
+
+	Property Description: keydesc;
+
+	Default
+	{
+		Radius 8;
+		Height 8;
+		Scale 0.25;
+		Tag "$T_KEY";
+		Inventory.PickupMessage "$P_KEY";
+		Inventory.PickupSound "item/pickup";
+		Inventory.MaxAmount 1;
+		+INVENTORY.INVBAR;
+		+INVENTORY.UNDROPPABLE;
+		+INVENTORY.UNTOSSABLE;
+		+FLATSPRITE;
+		+ROLLSPRITE;
+		mkKey.Description "$D_KEY";
+	}
+
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		// orient to slope if flat
+		SetToSlope(angle+FRandom[Key](-5,5));
+		Vector3 dir = CurSector.floorplane.Normal;
+		// offset ourselves a bit
+		SetOrigin(pos+dir*0.1,false);
+	}
+
+	action void SetToSlope( double dang )
+	{
+		vector3 fnormal = CurSector.floorplane.Normal;
+		vector2 fnormalp1 = ((fnormal.x != 0) || (fnormal.y != 0))?(fnormal.x,fnormal.y).Unit():(0,0);
+		vector2 fnormalp2 = ((fnormal.x,fnormal.y).Length(),fnormal.z);
+		double fang = atan2(fnormalp1.y,fnormalp1.x); // floor angle (not pitch!)
+		double fpitch = atan2(fnormalp2.x,fnormalp2.y); // floor pitch
+		double ddiff1 = cos(fang-(dang-90));
+		double ddiff2 = cos(fang-dang);
+		pitch = -fpitch*ddiff2;
+		roll = fpitch*ddiff1;
+		angle = dang;
+	}
+
+	override bool Use( bool pickup )
+	{
+		if ( pickup ) return false;	// no autoactivate
+		Owner.A_PlaySound("item/use",CHAN_6);
+		Owner.A_Print(keydesc,3.0);
+		return false;
+	}
+
+	override void BeginPlay()
+	{
+		if ( GetClass() == "mkKey" )
+			ThrowAbortException("Attempt to instantiate base class.");
+		else Super.BeginPlay();
+	}
+}
+
+Class mkKey1 : mkKey
+{
+	Default
+	{
+		//$Title Key (Room 103)
+		//$Category Items/Keys
+		Tag "$T_KEY1";
+		Inventory.PickupMessage "$P_KEY1";
+		Inventory.Icon "KEY1A0";
+		mkKey.Description "$D_KEY1";
+	}
+	States
+	{
+	Spawn:
+		KEY1 A 10;
+		KEY1 A 10 Bright;
+		Loop;
+	}
+}
+
+Class mkKey2 : mkKey
+{
+	Default
+	{
+		//$Title Key (Basement)
+		//$Category Items/Keys
+		Tag "$T_KEY2";
+		Inventory.PickupMessage "$P_KEY2";
+		Inventory.Icon "KEY2A0";
+		mkKey.Description "$D_KEY2";
+	}
+	States
+	{
+	Spawn:
+		KEY2 A 10;
+		KEY2 A 10 Bright;
+		Loop;
+	}
+}
+
+Class mkKey3 : mkKey
+{
+	Default
+	{
+		//$Title Key (Red)
+		//$Category Items/Keys
+		Tag "$T_KEY3";
+		Inventory.PickupMessage "$P_KEY3";
+		Inventory.Icon "KEY3A0";
+		mkKey.Description "$D_KEY3";
+	}
+	States
+	{
+	Spawn:
+		KEY3 A 10;
+		KEY3 A 10 Bright;
+		Loop;
+	}
+}
+
+Class mkKey4 : mkKey
+{
+	Default
+	{
+		//$Title Key (3rd floor)
+		//$Category Items/Keys
+		Tag "$T_KEY4";
+		Inventory.PickupMessage "$P_KEY4";
+		Inventory.Icon "KEY4A0";
+		mkKey.Description "$D_KEY4";
+	}
+	States
+	{
+	Spawn:
+		KEY4 A 10;
+		KEY4 A 10 Bright;
+		Loop;
+	}
+}
+
+Class mkKey5 : mkKey
+{
+	Default
+	{
+		//$Title Key (Beyond)
+		//$Category Items/Keys
+		Tag "$T_KEY5";
+		Inventory.PickupMessage "$P_KEY5";
+		Inventory.Icon "KEY5A0";
+		mkKey.Description "$D_KEY5";
+	}
+	States
+	{
+	Spawn:
+		KEY5 A 10;
+		KEY5 A 10 Bright;
+		Loop;
+	}
+}
+
+Class mkKey6 : mkKey
+{
+	Default
+	{
+		//$Title Key (Silver)
+		//$Category Items/Keys
+		Tag "$T_KEY6";
+		Inventory.PickupMessage "$P_KEY6";
+		Inventory.Icon "KEY6A0";
+		mkKey.Description "$D_KEY6";
+	}
+	States
+	{
+	Spawn:
+		KEY6 A 10;
+		KEY6 A 10 Bright;
+		Loop;
+	}
+}
+
+Class mkKey7 : mkKey
+{
+	Default
+	{
+		//$Title Key (Awaken)
+		//$Category Items/Keys
+		Tag "$T_KEY7";
+		Inventory.PickupMessage "$P_KEY7";
+		Inventory.Icon "KEY7A0";
+		mkKey.Description "$D_KEY7";
+	}
+	States
+	{
+	Spawn:
+		KEY7 A 10;
+		KEY7 A 10 Bright;
+		Loop;
+	}
+}
+
+Class mkKey8 : mkKey
+{
+	Default
+	{
+		//$Title Key (Pearl)
+		//$Category Items/Keys
+		Tag "$T_KEY8";
+		Inventory.PickupMessage "$P_KEY8";
+		Inventory.Icon "KEY8A0";
+		mkKey.Description "$D_KEY8";
+	}
+	States
+	{
+	Spawn:
+		KEY8 A 10;
+		KEY8 A 10 Bright;
+		Loop;
+	}
+}

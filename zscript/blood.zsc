@@ -1,0 +1,404 @@
+// Base blood actor
+Class mkBlood : Actor
+{
+	Default
+	{
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+NOTELEPORT;
+		+PUFFGETSOWNER;
+	}
+	action void A_Bleed( int str = 1 )
+	{
+		if ( !target ) return;
+		let b = Spawn("mkBloodSpray",pos);
+		Vector2 dirto = target.Vec2To(self).unit();
+		b.angle = atan2(dirto.y,dirto.x);
+		b.pitch = FRandom[Blood](-60,30);
+		b.translation = translation;
+		mkBloodSpray(b).stepcolor = target.bloodcolor;
+		b.target = target;
+		b.args[0] = str;
+	}
+	States
+	{
+	Spawn:
+		TNT1 A 1 NoDelay A_Bleed(3);
+		Stop;
+		TNT1 A 1 A_Bleed(2);
+		Stop;
+		TNT1 A 1 A_Bleed(1);
+		Stop;
+	}
+}
+
+// a burst of blood attached to a bleeding actor
+Class mkBloodSpray : Actor
+{
+	double str;
+	int cnt;
+	Vector3 attachofs;
+	double baseang;
+	Color stepcolor;
+	Default
+	{
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+NOTELEPORT;
+		+THRUACTORS;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		if ( !target ) return;
+		str = FRandom[Blood](2.0,4.0)*args[0];
+		cnt = Random[Blood](2,3)*args[0];
+		attachofs.xy = RotateVector(target.Vec2To(self),-target.angle);
+		attachofs.z = pos.z-target.pos.z;
+		baseang = angle-target.angle;
+	}
+	private bool IsTargetFlying()
+	{
+		if ( !target ) return false;
+		if ( (abs(target.pos.z-target.floorz) > 1) && !target.TestMobjZ(true) ) return true;
+		if ( (target.bBlasted || target.health <= 0) && (target.vel.length() > 10.0) ) return true;
+		return false;
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( !target ) return;
+		Vector3 setofs;
+		setofs = (cos(target.angle)*attachofs.x+sin(target.angle)*attachofs.y,sin(target.angle)*attachofs.x-cos(target.angle)*attachofs.y,attachofs.z);
+		SetOrigin(target.pos+setofs,false);
+		int sz = 1.5*args[0];
+		double ang, pt;
+		for ( int i=0; i<sz; i++ )
+		{
+			let d = Spawn("mkBloodDrop",pos);
+			d.translation = translation;
+			mkBloodDrop(d).stepcolor = stepcolor;
+			ang = baseang+target.angle+FRandom[Blood](-15,15)*str;
+			pt = pitch+FRandom[Blood](-15,15)*str;
+			Vector3 dir = (cos(pt)*cos(ang),cos(pt)*sin(ang),-sin(pt));
+			d.vel = dir*str*FRandom[Blood](0.8,1.2);
+			d.scale *= str*0.15*FRandom[Blood](0.6,1.4);
+		}
+		bool flying = IsTargetFlying();
+		if ( !flying ) str *= 1.0-(0.3/sz);
+		if ( (str <= 0.05) || ((cnt-- <= 0) && !flying) ) Destroy();
+	}
+}
+
+// drop of salsa
+// becomes a flatsprite on crash
+Class mkBloodDrop : Actor
+{
+	int deadtimer;
+	Color stepcolor;
+
+	action void A_SetToSlope( double dang )
+	{
+		vector3 fnormal = invoker.CurSector.floorplane.Normal;
+		vector2 fnormalp1 = ((fnormal.x != 0) || (fnormal.y != 0))?(fnormal.x,fnormal.y).Unit():(0,0);
+		vector2 fnormalp2 = ((fnormal.x,fnormal.y).Length(),fnormal.z);
+		double fang = atan2(fnormalp1.y,fnormalp1.x); // floor angle (not pitch!)
+		double fpitch = atan2(fnormalp2.x,fnormalp2.y); // floor pitch
+		double ddiff1 = cos(fang-(dang-90));
+		double ddiff2 = cos(fang-dang);
+		invoker.pitch = -fpitch*ddiff2;
+		invoker.roll = fpitch*ddiff1;
+		invoker.angle = dang;
+	}
+
+	Default
+	{
+		+CORPSE;
+		+NOTELEPORT;
+		+THRUACTORS;
+		+FORCEXYBILLBOARD;
+		Scale 0.5;
+		Radius 1;
+		Height 1;
+		Mass 1;
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( waterlevel > 0 ) A_FadeOut();
+		if ( !InStateSequence(CurState,ResolveState("Spawn")) )
+		{
+			deadtimer++;
+			if ( deadtimer > 1000 ) A_FadeOut(0.01);
+			return;
+		}
+		scale *= 0.99;
+		if ( scale.x <= 0.0 ) Destroy();
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		deadtimer = 0;
+	}
+	States
+	{
+	Spawn:
+		BLUD A 0 NoDelay A_Jump(256,Random[Blood](1,8));
+		BLUD AABBCCDD 1 A_SpawnItemEx("mkBloodTrail",flags:SXF_TRANSFERTRANSLATION);
+		Goto Spawn+1;
+	Crash:
+		BLUD E 0 { A_PlaySound("blood/drop"); A_SetToSlope(FRandom[Blood](0,360)); bFLATSPRITE = true; A_SetSize(12*scale.x); scale *= 0.25; A_QueueCorpse(); }
+		BLUD E 0 A_Jump(256,Random[Blood](1,8));
+		BLUD F -1 A_Stop();
+		Stop;
+		BLUD G -1 A_Stop();
+		Stop;
+		BLUD H -1 A_Stop();
+		Stop;
+		BLUD I -1 A_Stop();
+		Stop;
+	}
+}
+
+// lesser chunky salsa trail
+Class mkBloodTrail : Actor
+{
+	Default
+	{
+		+NOCLIP;
+		+NOGRAVITY;
+		+FORCEXYBILLBOARD;
+		Scale 0.4;
+		Alpha 0.5;
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( waterlevel > 0 ) A_FadeOut();
+		A_FadeOut(0.05);
+		A_SetScale(scale.x*1.02);
+	}
+	States
+	{
+	Spawn:
+		BLUD ABCD 2;
+		Loop;
+	}
+}
+
+// chunky salsa in the air
+Class mkBloodSmoke : Actor
+{
+	Default
+	{
+		+NOCLIP;
+		+NOGRAVITY;
+		+FORCEXYBILLBOARD;
+		Scale 1.2;
+		Alpha 0.5;
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( waterlevel > 0 ) A_FadeOut();
+		A_FadeOut(0.03);
+		A_SetScale(scale.x*1.02);
+	}
+	States
+	{
+	Spawn:
+		BLUD ABCD 2;
+		Loop;
+	}
+}
+
+Class mkBloodSmoke2 : mkBloodSmoke
+{
+	Default
+	{
+		Scale 2.5;
+		Alpha 1.0;
+	}
+}
+
+// flying gibs
+// inspired by Lud's Universal Gibs
+Class mkFlyingGib : Actor
+{
+	double rollvel;
+	int deadtimer;
+	Color stepcolor;
+
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		int decision = Random(0,5);
+		switch( decision )
+		{
+		case 0:
+			sprite = GetSpriteIndex('GIB1');
+			break;
+		case 1:
+			sprite = GetSpriteIndex('GIB2');
+			break;
+		case 2:
+			sprite = GetSpriteIndex('GIB3');
+			break;
+		case 3:
+			sprite = GetSpriteIndex('GIB4');
+			break;
+		case 4:
+			sprite = GetSpriteIndex('GIB5');
+			break;
+		case 5:
+			sprite = GetSpriteIndex('GIB6');
+			break;
+		}
+		double ang = FRandom[Gibs](0,360);
+		double pt = FRandom[Gibs](-60,20);
+		Vector3 dir = (cos(pt)*cos(ang),cos(pt)*sin(ang),sin(-pt));
+		vel = dir*FRandom[Gibs](5.0,15.0);
+		deadtimer = 0;
+		rollvel = FRandom[Gibs](10,20)*RandomPick[Gibs](-1,1);
+	}
+
+	override void Tick()
+	{
+		Super.Tick();
+		if ( InStateSequence(CurState,ResolveState("Death")) )
+		{
+			deadtimer++;
+			if ( deadtimer > 3000 ) A_FadeOut(0.01);
+			return;
+		}
+		let s = Spawn("mkBloodSmoke",pos);
+		s.translation = translation;
+		A_SetRoll(roll+rollvel,SPF_INTERPOLATE);
+	}
+
+	action void A_CorpseBleed()
+	{
+		let b = Spawn("mkBloodPool",pos);
+		b.translation = translation;
+		b.master = invoker;
+		mkBloodPool(b).stepcolor = invoker.stepcolor;
+		mkBloodPool(b).accel = 0.0005;
+		A_QueueCorpse();
+	}
+
+	action void A_Bleed()
+	{
+		double ang;
+		double pt;
+		Vector3 dir;
+		for ( int i=0; i<8; i++ )
+		{
+			let b = Spawn("mkBloodDrop",pos);
+			ang = FRandom[Gibs](0,360);
+			pt = FRandom[Gibs](-60,30);
+			dir = (cos(pt)*cos(ang),cos(pt)*sin(ang),sin(-pt));
+			b.vel = dir*FRandom[Gibs](0.3,2.2)*vel.length();
+			b.translation = translation;
+			mkBloodDrop(b).stepcolor = invoker.stepcolor;
+		}
+	}
+
+	Default
+	{
+		Radius 4;
+		Height 4;
+		Mass 10;
+		Scale 0.6;
+		Gravity 0.8;
+		BounceType "Doom";
+		BounceFactor 0.4;
+		+MISSILE;
+		+NOBLOCKMAP;
+		+ROLLSPRITE;
+		+ROLLCENTER;
+		+USEBOUNCESTATE;
+		+MOVEWITHSECTOR;
+	}
+	States
+	{
+	Spawn:
+		"####" A 1;
+		Loop;
+	Bounce:
+		"####" A 0 { A_Bleed(); A_PlaySound("gore/gibp"); }
+		Goto Spawn;
+	Death:
+		"####" A 1 { A_PlaySound("gore/gibp"); A_SetRoll(RandomPick[Gibs](0,180)+Random[Gibs](-5,5)); A_CorpseBleed(); }
+		"####" A -1;
+		Stop;
+	Dummy:
+		GIB1 A 0;
+		GIB2 A 0;
+		GIB3 A 0;
+		GIB4 A 0;
+		GIB5 A 0;
+		GIB6 A 0;
+		Stop;
+	}
+}
+
+// Blood pool
+Class mkBloodPool : Actor
+{
+	float sz, accel;
+	int deadtimer;
+	Color stepcolor;
+
+	Property ScaleAccel: accel;
+
+	action void A_SetToSlope( double dang )
+	{
+		vector3 fnormal = invoker.CurSector.floorplane.Normal;
+		vector2 fnormalp1 = ((fnormal.x != 0) || (fnormal.y != 0))?(fnormal.x,fnormal.y).Unit():(0,0);
+		vector2 fnormalp2 = ((fnormal.x,fnormal.y).Length(),fnormal.z);
+		double fang = atan2(fnormalp1.y,fnormalp1.x); // floor angle (not pitch!)
+		double fpitch = atan2(fnormalp2.x,fnormalp2.y); // floor pitch
+		double ddiff1 = cos(fang-(dang-90));
+		double ddiff2 = cos(fang-dang);
+		invoker.pitch = -fpitch*ddiff2;
+		invoker.roll = fpitch*ddiff1;
+		invoker.angle = dang;
+	}
+
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		sz = 0.01;
+		A_QueueCorpse();
+		deadtimer = 0;
+		A_SetToSlope(FRandom(0,360));
+	}
+
+	override void Tick()
+	{
+		Super.Tick();
+		if ( waterlevel > 0 ) A_FadeOut();
+		deadtimer++;
+		if ( master ) deadtimer = 0;
+		if ( deadtimer > 1000 ) A_FadeOut(0.01);
+		if ( accel <= 0.00001 ) return;
+		sz += accel;
+		accel *= 0.997;
+		A_SetScale(sz);
+		A_SetSize(50*sz);
+	}
+
+	Default
+	{
+		Scale 0.01;
+		Radius 1;
+		Height 1;
+		mkBloodPool.ScaleAccel 0.0012;
+	}
+	States
+	{
+	Spawn:
+		BLOD A -1;
+		Stop;
+	}
+}

@@ -1,0 +1,210 @@
+/*
+   Ambience Mixer system.
+   (C)2018 Marisa Kirisame, UnSX Team.
+   Released under the GNU Lesser General Public License version 3 (or later).
+   See https://www.gnu.org/licenses/lgpl-3.0.txt for its terms.
+*/
+
+/* Ambience Channel - Plays a looping ambience */
+Class mkAmbChannel : Actor
+{
+	default
+	{
+		Radius 0;
+		Height 0;
+		FloatBobPhase 0;
+		+NOGRAVITY
+		+NOBLOCKMAP
+		+NOINTERACTION
+		+DONTSPLASH
+	}
+	string name;
+	double fadeval, fadespeed;
+	double muteval, globalval;
+	bool fadeoutstop;
+	mkAmbMix parent;
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		A_PlaySound(name,CHAN_6|CHAN_NOPAUSE,max(0.0001,fadeval*(1.0-muteval)*globalval),TRUE,ATTN_NONE);
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		fadeval = clamp(fadeval+fadespeed,0.0,1.0);
+		A_SoundVolume(CHAN_6,fadeval*(1.0-muteval)*globalval);
+		if ( (fadeval <= 0) || (fadeval >= 1.0) ) fadespeed = 0.0;
+		if ( (fadeval <= 0) && fadeoutstop )
+		{
+			if ( parent ) parent.ClearChannel(name);
+			Destroy();
+		}
+	}
+	override void OnDestroy()
+	{
+		Super.OnDestroy();
+		A_StopSound(CHAN_6);
+	}
+}
+
+/* Ambience Mix - Multi-channel ambience mixer */
+Class mkAmbMix : Thinker
+{
+	const MAXCHAN = 64;
+
+	mkAmbChannel channels[MAXCHAN];
+
+	double muteval, mutespeed;
+	double globalval;
+
+	transient CVar sm_ambvol;
+
+	void StartChannel( string name, double fadein = 0.0 )
+	{
+		for ( int i=0; i<MAXCHAN; i++ )
+		{
+			if ( !channels[i] )
+			{
+				channels[i] = mkAmbChannel(Actor.Spawn("mkAmbChannel"));
+				channels[i].name = name;
+				channels[i].parent = self;
+				channels[i].fadespeed = fadein/TICRATE;
+				if ( !fadein ) channels[i].fadeval = 1.0;
+				channels[i].muteval = muteval;
+				channels[i].globalval = globalval;
+				return;
+			}
+			else if ( channels[i].name == name )
+			{
+				channels[i].fadeoutstop = false;
+				channels[i].fadespeed = fadein/TICRATE;
+				if ( !fadein ) channels[i].fadeval = 1.0;
+				channels[i].muteval = muteval;
+				channels[i].globalval = globalval;
+				return;
+			}
+		}
+		Console.Printf("Maximum limit of ambience channels reached! Contact the developer!");
+	}
+
+	void ClearChannel( string name )
+	{
+		for ( int i=0; i<MAXCHAN; i++ )
+		{
+			if ( !channels[i] || (channels[i].name != name) ) continue;
+			channels[i] = null;
+			return;
+		}
+	}
+
+	void StopChannel( string name, double fadeout = 0.0, bool dostop = true )
+	{
+		for ( int i=0; i<MAXCHAN; i++ )
+		{
+			if ( !channels[i] || (channels[i].name != name) ) continue;
+			if ( fadeout )
+			{
+				channels[i].fadespeed = -fadeout/TICRATE;
+				channels[i].fadeoutstop = false;
+			}
+			else channels[i].Destroy();
+			return;
+		}
+	}
+
+	void StopAllChannels( double fadeout = 0.0, bool dostop = true )
+	{
+		for ( int i=0; i<MAXCHAN; i++ )
+		{
+			if ( !channels[i] ) continue;
+			if ( fadeout )
+			{
+				channels[i].fadespeed = -fadeout/TICRATE;
+				channels[i].fadeoutstop = false;
+			}
+			else channels[i].Destroy();
+		}
+	}
+
+	override void OnDestroy()
+	{
+		Super.OnDestroy();
+		for ( int i=0; i<MAXCHAN; i++ )
+		{
+			if ( !channels[i] ) continue;
+			channels[i].Destroy();
+		}
+	}
+
+	override void Tick()
+	{
+		Super.Tick();
+		muteval = clamp(muteval+mutespeed,0.0,1.0);
+		if ( !sm_ambvol ) sm_ambvol = CVar.GetCVar('sm_ambientvolume',players[consoleplayer]);
+		globalval = sm_ambvol.GetFloat();
+		for ( int i=0; i<MAXCHAN; i++ )
+		{
+			if ( !channels[i] ) continue;
+			channels[i].muteval = muteval;
+			channels[i].globalval = globalval;
+		}
+	}
+
+	mkAmbMix Init()
+	{
+		ChangeStatNum(STAT_USER);
+		for ( int i=0; i<MAXCHAN; i++ ) channels[i] = null;
+		muteval = 0;
+		mutespeed = 0;
+		sm_ambvol = CVar.GetCVar('sm_ambientvolume',players[consoleplayer]);
+		return self;
+	}
+
+	static mkAmbMix Get()
+	{
+		ThinkerIterator t = ThinkerIterator.Create("mkAmbMix",STAT_USER);
+		let m = mkAmbMix(t.Next());
+		if ( !m ) m = new("mkAmbMix").Init();
+		return m;
+	}
+
+	static void MixStart( String name, double fadein = 0.0 )
+	{
+		mkAmbMix m = Get();
+		m.StartChannel(name,fadein);
+	}
+
+	static void MixStop( String name, double fadeout = 0.0, bool dostop = true )
+	{
+		mkAmbMix m = Get();
+		m.StopChannel(name,fadeout,dostop);
+	}
+
+	static void MixStopAll( double fadeout = 0.0, bool dostop = true )
+	{
+		mkAmbMix m = Get();
+		m.StopAllChannels(fadeout,dostop);
+	}
+
+	static void Mute( double fadeout = 0.0 )
+	{
+		mkAmbMix m = Get();
+		if ( fadeout ) m.mutespeed = fadeout/TICRATE;
+		else
+		{
+			m.mutespeed = 0.0;
+			m.muteval = 1.0;
+		}
+	}
+
+	static void Unmute( double fadein = 0.0 )
+	{
+		mkAmbMix m = Get();
+		if ( fadein ) m.mutespeed = -fadein/TICRATE;
+		else
+		{
+			m.mutespeed = 0.0;
+			m.muteval = 0.0;
+		}
+	}
+}

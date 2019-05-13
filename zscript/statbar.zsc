@@ -1,0 +1,67 @@
+// the status bar of Soundless Mound
+// not a lot of effort was put into it
+Class mkStatBar : BaseStatusBar
+{
+	HUDFont mBaseFont, mTinyFont;
+	InventoryBarState InvBar;
+	DynamicValueInterpolator HealthInter;
+	Inventory LastSelected;
+	bool lastvisible;
+
+	override void Init()
+	{
+		Super.Init();
+		Font f = "HWFONTSM";
+		mBaseFont = HUDFont.Create(f);
+		f = "HWFONTTY";
+		mTinyFont = HUDFont.Create(f);
+		SetSize(0,320,200);
+		InvBar = InventoryBarState.CreateNoBox(mTinyFont,leftgfx:"",rightgfx:"");
+		HealthInter = DynamicValueInterpolator.Create(0,0.25,1,4);
+		LastSelected = null;
+		lastvisible = false;
+	}
+
+	override void Draw( int state, double TicFrac )
+	{
+		Super.Draw(state,TicFrac);
+		if ( (state != HUD_StatusBar) && (state != HUD_Fullscreen) )
+			return;
+		BeginHUD();
+		int CurHealth = HealthInter.GetValue();
+		int hcol = Font.CR_GREEN;
+		if ( CurHealth < 50 ) hcol = Font.CR_GOLD;
+		else if ( CurHealth < 25 ) hcol = Font.CR_RED;
+		DrawString(mBaseFont,FormatNumber(CurHealth,3),(32,-15.5),DI_TEXT_ALIGN_RIGHT,hcol);
+		DrawImage("hpicon",(36,-16),DI_ITEM_LEFT_TOP);
+		Inventory CurAmmo = GetCurrentAmmo();
+		if ( CurAmmo )
+		{
+			DrawString(mBaseFont,FormatNumber(CurAmmo.Amount,3),(32,-27.5),DI_TEXT_ALIGN_RIGHT,Font.CR_WHITE);
+			DrawImage("amicon",(36,-28),DI_ITEM_LEFT_TOP);
+		}
+		if ( isInventoryBarVisible() ) DrawInventoryBar(InvBar,(-8,-8),1,DI_SCREEN_RIGHT_BOTTOM|DI_ITEM_RIGHT,HX_SHADOW);
+		else if ( CPlayer.mo.InvSel )
+		{
+			DrawInventoryIcon(CPlayer.mo.InvSel,(-24,-24),DI_ITEM_CENTER,0.8);
+			if ( CPlayer.mo.InvSel.amount > 1 ) DrawString(mTinyFont,FormatNumber(CPlayer.mo.InvSel.amount,0,5),(-9,-(9+mTinyFont.mFont.GetHeight())),DI_TEXT_ALIGN_RIGHT,alpha:0.8);
+			DrawImage("selectbo",(-24,-24),DI_ITEM_CENTER,0.25);
+		}
+	}
+
+	override void NewGame()
+	{
+		Super.NewGame();
+		HealthInter.Reset(0);
+	}
+
+	override void Tick()
+	{
+		Super.Tick();
+		HealthInter.Update(CPlayer.Health);
+		if ( LastSelected && ((lastvisible != isInventoryBarVisible()) || (LastSelected != CPlayer.mo.InvSel)) )
+			S_Sound("item/select",CHAN_6);
+		lastvisible = isInventoryBarVisible();
+		LastSelected = CPlayer.mo.InvSel;
+	}
+}
