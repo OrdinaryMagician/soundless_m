@@ -118,15 +118,15 @@ Class mkCritter : Actor abstract
 
 	action void A_DoChase()
 	{
-		if ( Random[CritterMove]() < 3 ) PlayActiveSound();
 		Vector2 dir;
 		double dist;
-		if ( !target || target.health <= 0 )
+		if ( !target || (target.health <= 0) )
 		{
 			A_ClearTarget();
 			SetStateLabel("Spawn");
 			return;
 		}
+		if ( Random[CritterMove]() < 3 ) PlayActiveSound();
 		if ( CheckIfTargetInLOS(360,0,invoker.viewparams.maxdist*2,0) )
 		{
 			invoker.lastseen.SetOrigin(target.pos,false);

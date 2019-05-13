@@ -188,7 +188,7 @@ Class mkLight : DynamicLight
 		if ( mkFlashlight(target) && target.bInvisible ) bDORMANT = true;
 		// alert monsters hit by the light
 		if ( GetClass() != "mkLight" ) return;
-		if ( !bDORMANT && target.player )
+		if ( !bDORMANT && target.player && (target.health > 0) )
 		{
 			BlockThingsIterator bt = BlockThingsIterator.Create(target,200);
 			while ( bt.Next() )
