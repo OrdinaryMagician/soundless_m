@@ -11,12 +11,11 @@ float rnd( in float sd )
 	return rnd2(vec2(sd,1.0));
 }
 
-vec4 Process( vec4 color )
+vec4 ProcessTexel()
 {
-	vec2 coord = gl_TexCoord[0].st;
-	vec4 res = getTexel(coord+0.02*vec2(rnd(timer*0.4536),rnd(timer*0.7835)));
-	res += getTexel(coord-0.02*vec2(rnd(timer*0.6735),rnd(timer*0.4335)));
-	res = getTexel(coord)+0.5*res;
+	vec4 res = getTexel(vTexCoord.st+0.02*vec2(rnd(timer*0.4536),rnd(timer*0.7835)));
+	res += getTexel(vTexCoord.st-0.02*vec2(rnd(timer*0.6735),rnd(timer*0.4335)));
+	res = getTexel(vTexCoord.st)+0.5*res;
 	res.rgb *= vec3(1.59,0.84,0.77);
 	res.rgb = pow(res.rgb,vec3(0.71,0.99,1.37));
 	return res;

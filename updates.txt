@@ -37,3 +37,10 @@ Update 7: Map stuff fixed and even more rebalancing.
 Update 8: Sequence breaking?
 
 - Added a way to inhibit door activation while in cutscenes to prevent race conditions.
+
+Update 9: The cleanup
+
+- Cleaned up various ZScript warnings. Fine-tuned some math in the process.
+- Made Old Key spawn on the spot where the Vile Critter died. Should be easier to notice.
+- Bleeding texture shader has been rewritten. No longer needs tone mapping to be enabled and there are no more texture seams (requires a recent gzdoom devbuild)
+- Fixed Vile Critter projectiles not exploding on boss death.

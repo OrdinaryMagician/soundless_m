@@ -71,7 +71,7 @@ Class mkBloodSpray : Actor
 		Vector3 setofs;
 		setofs = (cos(target.angle)*attachofs.x+sin(target.angle)*attachofs.y,sin(target.angle)*attachofs.x-cos(target.angle)*attachofs.y,attachofs.z);
 		SetOrigin(target.pos+setofs,false);
-		int sz = 1.5*args[0];
+		int sz = int(1.5*args[0]);
 		double ang, pt;
 		for ( int i=0; i<sz; i++ )
 		{

@@ -67,10 +67,6 @@ HardwareShader PostProcess scene
 	Texture DitherTexture "textures/dither.png"
 }
 // otherworld vibrating/bleeding textures
-HardwareShader Texture bleedtex
-{
-	Shader "shaders/glsl/bleedtex.frag" 330
-}
 HardwareShader Texture txo_0119
 {
 	Shader "shaders/glsl/redtex.frag" 330
@@ -78,6 +74,12 @@ HardwareShader Texture txo_0119
 HardwareShader Texture txo_0140
 {
 	Shader "shaders/glsl/redtex.frag" 330
+}
+HardwareShader Texture txb_0119
+{
+	Shader "shaders/glsl/bleedredtex.frag" 330
+	Texture "bleedtex" "textures/bleedtex.png"
+	Texture "basetex" "textures/basetex.png"
 }
 HardwareShader Texture txo_0148
 {

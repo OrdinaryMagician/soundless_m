@@ -425,8 +425,8 @@ Class mkKnifeWeapon : mkWeapon
 	}
 	action void A_KnifeAttack()
 	{
-		int dmg = Random[Knife](2,3)**2;
-		dmg *= invoker.charge;
+		int dmg = Random[Knife](2,3);
+		dmg *= int(dmg*invoker.charge);
 		double ang = angle;
 		double pitch = AimLineAttack(ang,KNIFERANGE);
 		LineAttack(ang,KNIFERANGE,pitch,dmg,'Melee',"KnifePuff",LAF_ISMELEEATTACK);
@@ -544,10 +544,10 @@ Class mkCrowbarWeapon : mkWeapon
 		Vector2 str = (dmg*20.,dmg*10.);
 		if ( invoker.crit )
 		{
-			dmg = dmg**2;	// theoretically, there's a 1.25% chance that a fully charged swing can deal 972 points of damage, that's pretty high
+			dmg *= dmg;	// theoretically, there's a 1.25% chance that a fully charged swing can deal 972 points of damage, that's pretty high
 			str *= 2;
 		}
-		dmg *= invoker.charge;
+		dmg *= int(invoker.charge);
 		str *= invoker.charge;
 		double ang = angle;
 		double pitch = AimLineAttack(ang,CROWBARRANGE);
@@ -583,7 +583,7 @@ Class mkCrowbarWeapon : mkWeapon
 		CRWB KLM 1 A_Swing(2.0*invoker.charge,1.0*invoker.charge,-0.6*invoker.charge);
 		CRWB N 1 { A_Swing(1.5*invoker.charge,1.25*invoker.charge,-0.5*invoker.charge); A_CrowbarAttack(); }
 		CRWB OP 1 A_Swing(0.5*invoker.charge,1.75*invoker.charge,-0.4*invoker.charge);
-		TNT1 A 6 A_SetTics(6*invoker.charge*invoker.charge);
+		TNT1 A 6 A_SetTics(int(6*invoker.charge*invoker.charge));
 		TNT1 A 0 A_ReFire();
 		CRWB DDCCBB 1 A_Swing(-0.75,-1.0,0.1);
 		Goto Ready;
@@ -679,9 +679,9 @@ Class mkSparkLight : DynamicLight
 			Destroy();
 			return;
 		}
-		args[LIGHT_RED] = 64*target.alpha;
-		args[LIGHT_GREEN] = 48*target.alpha;
-		args[LIGHT_BLUE] = 24*target.alpha;
+		args[LIGHT_RED] = int(64*target.alpha);
+		args[LIGHT_GREEN] = int(48*target.alpha);
+		args[LIGHT_BLUE] = int(24*target.alpha);
 	}
 }
 

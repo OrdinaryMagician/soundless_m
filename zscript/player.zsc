@@ -191,9 +191,9 @@ Class mkDarklight : DynamicLight
 			return;
 		}
 		SetOrigin(target.vec3Offset(0,0,target.player.viewheight),true);
-		args[LIGHT_RED] = 24*charge;
-		args[LIGHT_GREEN] = 24*charge;
-		args[LIGHT_BLUE] = 32*charge;
+		args[LIGHT_RED] = int(24*charge);
+		args[LIGHT_GREEN] = int(24*charge);
+		args[LIGHT_BLUE] = int(32*charge);
 		bDORMANT = (target.player != players[consoleplayer]);
 		mkFlashlight fl = mkFlashlight(target.FindInventory("mkFlashlight"));
 		if ( fl && fl.bActive )
@@ -261,15 +261,11 @@ Class DoorStatus : Thinker
 
 Class MapHandler : StaticEventHandler
 {
-	CVar tmap;
-	int lasttmap;
 	Line lastactivated;
 	ui bool noclipwarn;
 
 	override void WorldLoaded( WorldEvent e )
 	{
-		tmap = CVar.GetCVar('gl_tonemap',players[consoleplayer]);
-		lasttmap = -1;
 		if ( gamestate == GS_TITLELEVEL ) return;
 		if ( !e.IsSaveGame && !e.IsReOpen )
 		{
@@ -335,13 +331,6 @@ Class MapHandler : StaticEventHandler
 
 	override void WorldTick()
 	{
-		int curtmap = tmap.GetInt();
-		if ( curtmap != lasttmap )
-		{
-			if ( curtmap == 0 ) TexMan.ReplaceTextures("bleedtex","nobleed",0);
-			else TexMan.ReplaceTextures("nobleed","bleedtex",0);
-			lasttmap = curtmap;
-		}
 		if ( gamestate != GS_TITLELEVEL ) return;
 		// wavy camera for TITLEMAP
 		players[consoleplayer].mo.A_SetAngle(sin(gametic*0.233)*20.0,SPF_INTERPOLATE);

@@ -113,7 +113,7 @@ Class mkCritter : Actor abstract
 		}
 		else if ( !Warp(self,speed,flags:WARPF_TESTONLY) || (invoker.wandertimer-- <= 0) )
 			SetStateLabel("Spawn");
-		else TryMove(pos.xy+dir*speed,maxdropoffheight);
+		else TryMove(pos.xy+dir*speed,int(maxdropoffheight));
 	}
 
 	action void A_DoChase()
@@ -155,7 +155,7 @@ Class mkCritter : Actor abstract
 			else
 			{
 				invoker.angle = atan2(dir.y,dir.x);
-				TryMove(pos.xy+dir*speed,maxdropoffheight);
+				TryMove(pos.xy+dir*speed,int(maxdropoffheight));
 				invoker.chasetime = 0;
 			}
 		}
@@ -166,7 +166,7 @@ Class mkCritter : Actor abstract
 			invoker.angle = atan2(dir.y,dir.x);
 			if ( (dist <= radius) || !Warp(self,speed,flags:WARPF_TESTONLY) )
 				A_ClearTarget();
-			else TryMove(pos.xy+dir*speed,maxdropoffheight);
+			else TryMove(pos.xy+dir*speed,int(maxdropoffheight));
 		}
 		else
 		{
@@ -370,6 +370,7 @@ Class mkCritter1 : mkCritter
 	XDeath:
 		TNT1 A 0 { A_NoBlocking(); A_PlaySound("gore/gib"); }
 		TNT1 AA 2 A_BurstGibs();
+		TNT1 A -1;
 		Stop;
 	}
 }
@@ -476,6 +477,7 @@ Class mkCritter2 : mkCritter
 	XDeath:
 		TNT1 A 0 { A_NoBlocking(); A_PlaySound("gore/gib"); }
 		TNT1 AAAA 2 A_BurstGibs();
+		TNT1 A -1;
 		Stop;
 	}
 }
@@ -608,6 +610,7 @@ Class mkCritter3 : mkCritter
 	XDeath:
 		TNT1 A 0 { A_NoBlocking(); A_PlaySound("gore/gib"); }
 		TNT1 AAAAA 2 A_BurstGibs();
+		TNT1 A -1;
 		Stop;
 	}
 }
@@ -625,7 +628,7 @@ Class mkFire : Actor
 	}
 	action void A_LesserFires()
 	{
-		tics = scale.x*3;
+		tics = int(scale.x*3);
 		if ( tics == 0 ) return;
 		Actor a;
 		a = Spawn("mkFire",pos+(FRandom[Fires](-8*scale.x,8*scale.x),FRandom[Fires](-8*scale.x,8*scale.x),FRandom[Fires](0,16*scale.x)));
@@ -691,8 +694,8 @@ Class mkEmberLight : DynamicLight
 			return;
 		}
 		double phase = (13-target.frame)/13.0;
-		args[LIGHT_RED] = 64*phase;
-		args[LIGHT_BLUE] = 64*phase;
+		args[LIGHT_RED] = int(64*phase);
+		args[LIGHT_BLUE] = int(64*phase);
 	}
 }
 
@@ -839,7 +842,7 @@ Class mkFireball2 : Actor
 			e.vel = dir*FRandom[Fireball](0.5,8.0);
 		}
 		int n = 5;
-		if ( mkCritter4(target) ) n /= mkCritter4(target).HealthFact();
+		if ( mkCritter4(target) ) n = int(n/mkCritter4(target).HealthFact());
 		for ( int i=0; i<n; i++ )
 		{
 			ang = FRandom[Fireball](0,360);
@@ -937,7 +940,7 @@ Class mkCritter4 : mkCritter
 
 	action void A_ResetTimer()
 	{
-		invoker.attacktimer = Random[Critter4](15,25)*invoker.HealthFact();
+		invoker.attacktimer = int(Random[Critter4](15,25)*invoker.HealthFact());
 	}
 
 	action void A_CountTimer( int val = 1 )
@@ -964,7 +967,7 @@ Class mkCritter4 : mkCritter
 	action void A_Attack()
 	{
 		int decision = Random[Critter4](1,100);
-		int summonchance = 30+30*(1.0-invoker.HealthFact());
+		int summonchance = int(30+30*(1.0-invoker.HealthFact()));
 		if ( decision <= summonchance )
 		{
 			if ( !A_DoSummon() )
@@ -991,13 +994,13 @@ Class mkCritter4 : mkCritter
 		if ( decision <= 50 )
 		{
 			kind = "mkCritter1";
-			n = min(2/invoker.HealthFact(),invoker.spots.size());
+			n = min(int(2/invoker.HealthFact()),invoker.spots.size());
 			requested = n;
 		}
 		else if ( decision <= 80 )
 		{
 			kind = "mkCritter2";
-			n = min(1/invoker.HealthFact(),invoker.spots.size());
+			n = min(int(1/invoker.HealthFact()),invoker.spots.size());
 			requested = n*3;
 		}
 		else
@@ -1038,7 +1041,7 @@ Class mkCritter4 : mkCritter
 		Vector2 fpos;
 		fpos = pos.xy+(cos(angle+50),sin(angle+50))*50;
 		Actor a;
-		int num = 3/invoker.HealthFact();
+		int num = int(3/invoker.HealthFact());
 		for ( int i=0; i<num; i++ )
 		{
 			a = Spawn("mkFireball",(fpos.x,fpos.y,pos.z+16));
@@ -1064,7 +1067,7 @@ Class mkCritter4 : mkCritter
 	action void A_DoFire2()
 	{
 		invoker.ShuffleSpots();
-		int n = min(2/invoker.HealthFact(),invoker.spots.size());
+		int n = min(int(2/invoker.HealthFact()),invoker.spots.size());
 		Actor a;
 		for ( int i=0; i<n; i++ )
 		{
@@ -1096,7 +1099,8 @@ Class mkCritter4 : mkCritter
 			if ( a.species != invoker.species ) continue;
 			if ( a == invoker || a.bKILLED ) continue;
 			if ( others && (a.master != self) ) continue;
-			a.Die(null,null);
+			if ( a.bMISSILE ) a.ExplodeMissile();
+			else a.Die(null,null);
 		}
 	}
 
@@ -1156,6 +1160,7 @@ Class mkCritter4 : mkCritter
 		+NOTARGET;
 		+THRUSPECIES;
 		BloodColor "10 10 10";
+		Activation THINGSPEC_ThingActs;	// vile critters activate their own death specials
 	}
 
 	States
@@ -1166,10 +1171,10 @@ Class mkCritter4 : mkCritter
 		CRI4 A 2 { A_StartWander(); A_CountTimer(); }
 		Wait;
 	Wander:
-		CRI4 A 4 { A_DoWander(); A_Step(-1); A_CountTimer(); A_SetTics(ceil(4*invoker.HealthFact())); }
-		CRI4 ABBCC 4 { A_DoWander(); A_SetTics(ceil(3*invoker.HealthFact())); }
-		CRI4 D 4 { A_DoWander(); A_Step(1); A_CountTimer(); A_SetTics(ceil(4*invoker.HealthFact())); }
-		CRI4 DEEFF 4 { A_DoWander(); A_SetTics(ceil(3*invoker.HealthFact())); }
+		CRI4 A 4 { A_DoWander(); A_Step(-1); A_CountTimer(); A_SetTics(int(ceil(4*invoker.HealthFact()))); }
+		CRI4 ABBCC 4 { A_DoWander(); A_SetTics(int(ceil(3*invoker.HealthFact()))); }
+		CRI4 D 4 { A_DoWander(); A_Step(1); A_CountTimer(); A_SetTics(int(ceil(4*invoker.HealthFact()))); }
+		CRI4 DEEFF 4 { A_DoWander(); A_SetTics(int(ceil(3*invoker.HealthFact()))); }
 		Loop;
 	Pain:
 		CRI4 G 10 A_Pain();
@@ -1202,6 +1207,7 @@ Class mkCritter4 : mkCritter
 		CRI4 G 2 { A_Scream(); A_NoBlocking(); }
 		TNT1 A 0 { A_PlaySound("gore/gib"); A_QuakeEx(8,8,8,80,0,1000,"",QF_RELATIVE|QF_SCALEDOWN); }
 		TNT1 AAAAAA 3 A_BurstGibs();
+		TNT1 A -1;
 		Stop;
 	}
 }
