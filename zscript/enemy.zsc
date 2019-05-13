@@ -38,7 +38,7 @@ Class mkCritter : Actor abstract
 	Property MinSearch: minsearch;
 	Property MaxSearch: maxsearch;
 
-	action void A_Step( int footnum )
+	void A_Step( int footnum )
 	{
 		// check if we're stepping on blood
 		ThinkerIterator t = ThinkerIterator.Create("Actor");
@@ -49,74 +49,77 @@ Class mkCritter : Actor abstract
 			if ( !(a is "mkBloodPool") && !(a is "mkBloodDrop") ) continue;
 			dist = Vec3To(a);
 			if ( (abs(dist.x) > a.radius) || (abs(dist.y) > a.radius) || (abs(dist.z) > a.height) ) continue;
-			invoker.feetbloodlv = min(invoker.feetbloodlv+a.alpha*0.4,2.5);
-			if ( a is "mkBloodPool" ) invoker.feetbloodcol = mkBloodPool(a).stepcolor;
-			else if ( a is "mkBloodDrop" ) invoker.feetbloodcol = mkBloodDrop(a).stepcolor;
+			feetbloodlv = min(feetbloodlv+a.alpha*0.4,2.5);
+			if ( a is "mkBloodPool" ) feetbloodcol = mkBloodPool(a).stepcolor;
+			else if ( a is "mkBloodDrop" ) feetbloodcol = mkBloodDrop(a).stepcolor;
 			A_PlaySound("step/blood",CHAN_7);
 			return;
 		}
-		if ( invoker.feetbloodlv > 0 )
+		if ( feetbloodlv > 0 )
 		{
 			Vector3 y = (sin(angle),-cos(angle),0);
-			let f = Spawn("mkFootprint",pos+y*invoker.feetdist*footnum+y*invoker.feetadjust);
+			let f = Spawn("mkFootprint",pos+y*feetdist*footnum+y*feetadjust);
 			f.angle = angle;
 			// darken the shade
-			f.SetShade(Color(invoker.feetbloodcol.r/4,invoker.feetbloodcol.g/4,invoker.feetbloodcol.b/4));
-			f.alpha *= min(invoker.feetbloodlv,1.0);
-			f.frame = invoker.footframe;
-			f.scale *= invoker.footsize;
-			invoker.feetbloodlv = max(invoker.feetbloodlv-0.15,0);
+			f.SetShade(Color(feetbloodcol.r/4,feetbloodcol.g/4,feetbloodcol.b/4));
+			f.alpha *= min(feetbloodlv,1.0);
+			f.frame = footframe;
+			f.scale *= footsize;
+			feetbloodlv = max(feetbloodlv-0.15,0);
 		}
-		A_PlaySound(invoker.StepSound,CHAN_7);
+		A_PlaySound(StepSound,CHAN_7);
 	}
 
-	action void A_StartWander()
+	void A_StartWander()
 	{
-		invoker.searchtime = Random[Critter](invoker.minsearch,invoker.maxsearch);
-		if ( (LookForPlayers(false,invoker.viewparams) || invoker.lastheard) && ResolveState("Chase") )
+		searchtime = Random[Critter](minsearch,maxsearch);
+		if ( (LookForPlayers(false,viewparams) || lastheard) && ResolveState("Chase") )
 		{
 			// don't answer to noises if we only heard things
-			if ( bAMBUSH && !invoker.target ) return;
+			if ( bAMBUSH && !target ) return;
 			bAMBUSH = false;
-			if ( !invoker.target ) invoker.target = invoker.lastheard;
-			if ( invoker.lastseesound < (level.time-3) )
+			if ( !target ) target = lastheard;
+			if ( lastseesound < (level.time-3) )
 				A_PlaySound(SeeSound,CHAN_VOICE);
-			invoker.lastseesound = level.time;
+			lastseesound = level.time;
 			SetStateLabel("Chase");
 			return;
 		}
 		// no walking around if we're not meant to
 		if ( bSTANDSTILL || bAMBUSH ) return;
-		invoker.wanderangle = FRandom[CritterMove](0.0,360.0);
-		invoker.wandertimer = Random[CritterMove](20,60);
+		wanderangle = FRandom[CritterMove](0.0,360.0);
+		wandertimer = Random[CritterMove](20,60);
 		bool clearway = true;
-		for ( int i=1; i<=4; i++ )
+		Vector3 oldpos = pos;
+		Vector2 dir = (cos(wanderangle),sin(wanderangle))*speed;
+		for ( int i=0; i<4; i++ )
 		{
-			clearway = Warp(self,speed*i,0,0,invoker.wanderangle,WARPF_TESTONLY|WARPF_ABSOLUTEANGLE);
+			clearway = TryMove(Vec2Offset(dir.x,dir.y),int(maxdropoffheight));
 			if ( !clearway ) break;
 		}
+		SetOrigin(oldpos,false);
 		if ( clearway ) SetStateLabel("Wander");
 	}
 
-	action void A_DoWander()
+	void A_DoWander()
 	{
 		if ( Random[CritterMove]() < 3 ) PlayActiveSound();
-		invoker.angle = invoker.wanderangle;
-		Vector2 dir = (cos(invoker.angle),sin(invoker.angle));
-		if ( (LookForPlayers(false,invoker.viewparams) || invoker.lastheard) && ResolveState("Chase") )
+		angle = wanderangle;
+		Vector2 dir = (cos(angle),sin(angle))*speed;
+		if ( (LookForPlayers(false,viewparams) || lastheard) && ResolveState("Chase") )
 		{
-			if ( !invoker.target ) invoker.target = invoker.lastheard;
-			if ( invoker.lastseesound < (level.time-3) )
+			if ( !target ) target = lastheard;
+			if ( lastseesound < (level.time-3) )
 				A_PlaySound(SeeSound,CHAN_VOICE);
-			invoker.lastseesound = level.time;
+			lastseesound = level.time;
 			SetStateLabel("Chase");
 		}
-		else if ( !Warp(self,speed,flags:WARPF_TESTONLY) || (invoker.wandertimer-- <= 0) )
+		else if ( !CheckMove(Vec2Offset(dir.x,dir.y),int(maxdropoffheight)) || (wandertimer-- <= 0) )
 			SetStateLabel("Spawn");
-		else TryMove(pos.xy+dir*speed,int(maxdropoffheight));
+		else TryMove(Vec2Offset(dir.x,dir.y),int(maxdropoffheight));
 	}
 
-	action void A_DoChase()
+	void A_DoChase()
 	{
 		Vector2 dir;
 		double dist;
@@ -127,79 +130,84 @@ Class mkCritter : Actor abstract
 			return;
 		}
 		if ( Random[CritterMove]() < 3 ) PlayActiveSound();
-		if ( CheckIfTargetInLOS(360,0,invoker.viewparams.maxdist*2,0) )
+		if ( CheckIfTargetInLOS(360,0,viewparams.maxdist*2,0) )
 		{
-			invoker.lastseen.SetOrigin(target.pos,false);
-			dir = Vec2To(invoker.lastseen).unit();
-			dist = Vec2To(invoker.lastseen).length();
+			lastseen.SetOrigin(target.pos,false);
+			dir = Vec2To(lastseen).unit();
+			dist = Vec2To(lastseen).length();
 			if ( CheckMeleeRange() && ResolveState("Melee") )
 			{
 				SetStateLabel("Melee");
 				return;
 			}
 			// kind of a hack, but it works
-			target.bSOLID = false;
 			bool clearway = true;
-			for ( int i=1; i<=10; i++ )
+			Vector3 oldpos = pos;
+			for ( int i=0; i<10; i++ )
 			{
-				clearway = Warp(self,min(speed*i,dist),angle:atan2(dir.y,dir.x),flags:WARPF_TESTONLY|WARPF_ABSOLUTEANGLE);
+				clearway = TryMove(Vec2Offset(dir.x*speed,dir.y*speed),int(maxdropoffheight));
+				if ( BlockingMobj == target )
+				{
+					clearway = true;
+					break;
+				}
 				if ( !clearway ) break;
 			}
-			target.bSOLID = true;
-			if ( !clearway ) invoker.chasetime = Random[CritterMove](20,30);
-			if ( invoker.chasetime > 0 )
+			SetOrigin(oldpos,false);
+			if ( !clearway ) chasetime = Random[CritterMove](20,30);
+			if ( chasetime > 0 )
 			{
 				A_Chase(null,null,CHF_NOPLAYACTIVE);
-				invoker.chasetime--;
+				chasetime--;
 			}
 			else
 			{
-				invoker.angle = atan2(dir.y,dir.x);
-				TryMove(pos.xy+dir*speed,int(maxdropoffheight));
-				invoker.chasetime = 0;
+				angle = atan2(dir.y,dir.x);
+				TryMove(Vec2Offset(dir.x*speed,dir.y*speed),int(maxdropoffheight));
+				chasetime = 0;
 			}
 		}
-		else if ( Vec3To(invoker.lastseen).length() < (invoker.viewparams.maxdist*2) )
+		else if ( Vec3To(lastseen).length() < (viewparams.maxdist*2) )
 		{
-			dir = Vec2To(invoker.lastseen).unit();
-			dist = Vec2To(invoker.lastseen).length();
-			invoker.angle = atan2(dir.y,dir.x);
-			if ( (dist <= radius) || !Warp(self,speed,flags:WARPF_TESTONLY) )
+			dir = Vec2To(lastseen).unit();
+			dist = Vec2To(lastseen).length();
+			angle = atan2(dir.y,dir.x);
+			if ( (dist <= radius) || !CheckMove(Vec2Offset(dir.x*speed,dir.y*speed)) )
 				A_ClearTarget();
-			else TryMove(pos.xy+dir*speed,int(maxdropoffheight));
+			else TryMove(Vec2Offset(dir.x*speed,dir.y*speed),int(maxdropoffheight));
 		}
 		else
 		{
 			A_Chase(null,null,CHF_NOPLAYACTIVE);
-			invoker.searchtime--;
-			if ( invoker.searchtime <= 0 ) A_ClearTarget();
+			searchtime--;
+			if ( searchtime <= 0 ) A_ClearTarget();
 		}
 	}
 
-	action void A_JumpMove( bool meleecheck = true )
+	void A_JumpMove( bool meleecheck = true )
 	{
 		if ( meleecheck && CheckMeleeRange() ) return;
 		if ( target && ResolveState("Chase") ) SetStateLabel("Chase");
 		else SetStateLabel("Spawn");
 	}
 
-	action void A_CorpseBleed()
+	void A_CorpseBleed()
 	{
 		let b = Spawn("mkBloodPool",pos);
 		b.translation = bloodtranslation;
-		b.master = invoker;
+		b.master = self;
 		mkBloodPool(b).stepcolor = bloodcolor;
 		A_QueueCorpse();
-		invoker.isdead = true;
+		isdead = true;
 	}
 
-	action void A_CorpseThump()
+	void A_CorpseThump()
 	{
 		A_PlaySound("body/thump");
 		A_Stop();
 	}
 
-	action void A_BurstGibs()
+	void A_BurstGibs()
 	{
 		Actor a;
 		double ang, pt;
@@ -236,8 +244,8 @@ Class mkCritter : Actor abstract
 		// sane defaults
 		viewparams.fov = 90;
 		viewparams.mindist = 0;
-		viewparams.maxdist = 200;
-		viewparams.maxheardist = 900;
+		viewparams.maxdist = 100;
+		viewparams.maxheardist = 300;
 		viewparams.flags = 0;
 		viewparams.seestate = ResolveState("Chase");
 		chasetime = 0;
@@ -267,20 +275,12 @@ Class mkCritter : Actor abstract
 		if ( lastseen ) lastseen.Destroy();
 	}
 
-	override void BeginPlay()
-	{
-		if ( GetClass() == "mkCritter" )
-			ThrowAbortException("Attempt to instantiate base class.");
-		else Super.BeginPlay();
-	}
-
 	Default
 	{
 		Radius 16;
 		Height 56;
 		BloodType "mkBlood";
 		Species "Critter";
-		Obituary "$CRIT_OBITUARY";
 		MONSTER;
 		+FLOORCLIP;
 		+NOINFIGHTING;
@@ -290,14 +290,14 @@ Class mkCritter : Actor abstract
 // Imp critter
 Class mkCritter1 : mkCritter
 {
-	action void A_Critter1Atk()
+	void A_Critter1Atk()
 	{
 		if ( !target || !CheckMeleeRange() ) return;
 		int damage = random[Critter1](2,3);
 		A_PlaySound("imp/melee",CHAN_WEAPON);
 		int newdam = target.DamageMobj(self,self,damage,"Melee");
 		target.TraceBleed(newdam>0?newdam:damage,self);
-		Vector2 bleeddir = target.Vec2To(invoker).unit();
+		Vector2 bleeddir = target.Vec2To(self).unit();
 		Vector3 bleedpos = target.pos+((cos(bleeddir.x)+sin(bleeddir.y))*target.radius,(sin(bleeddir.x)-cos(bleeddir.y))*target.radius,target.height*0.5);
 		target.SpawnBlood(bleedpos,atan2(bleeddir.y,bleeddir.x),newdam>0?newdam:damage);
 	}
@@ -306,6 +306,7 @@ Class mkCritter1 : mkCritter
 	{
 		//$Title Imp Critter
 		//$Category Enemies
+		Tag "$T_CRIT1";
 		Health 30;
 		PainChance 255;
 		Scale 0.7;
@@ -323,9 +324,10 @@ Class mkCritter1 : mkCritter
 		mkCritter.FeetAdjust -2.5;
 		mkCritter.FootSize 1.6;
 		mkCritter.FootFrame 1;
-		mkCritter.MinSearch 20;
-		mkCritter.MaxSearch 50;
+		mkCritter.MinSearch 2;
+		mkCritter.MaxSearch 3;
 		BloodColor "10 10 10";
+		Obituary "$CRIT1_OBITUARY";
 	}
 	States
 	{
@@ -340,20 +342,21 @@ Class mkCritter1 : mkCritter
 		CRI1 CDD 5 A_DoWander();
 		Loop;
 	Chase:
-		CRI1 A 3 { A_DoChase(); A_Step(1); }
-		CRI1 ABB 3 A_DoChase();
-		CRI1 C 3 { A_DoChase(); A_Step(-1); }
-		CRI1 CDD 3 A_DoChase();
+		CRI1 A 3 Fast { A_DoChase(); A_Step(1); }
+		CRI1 ABB 3 Fast A_DoChase();
+		CRI1 C 3 Fast { A_DoChase(); A_Step(-1); }
+		CRI1 CDD 3 Fast A_DoChase();
 		Loop;
 	Melee:
 		CRI1 E 0 A_PlaySound(SeeSound,CHAN_WEAPON);
-		CRI1 E 5 { A_FaceTarget(); A_Recoil(-0.5); }
+		CRI1 E 6 A_FaceTarget();
 		CRI1 F 4 A_FaceTarget();
 		CRI1 G 3 A_Critter1Atk();
 		CRI1 G 0 A_JumpMove();
 		Goto Melee+1;
 	Pain:
-		CRI1 H 10 A_Pain();
+		CRI1 H 2;
+		CRI1 H 8 A_Pain();
 		CRI1 H 0 A_JumpMove();
 		Goto Spawn;
 	Death:
@@ -380,14 +383,14 @@ Class mkCritter2 : mkCritter
 {
 	bool asleep;
 
-	action void A_Critter2Atk()
+	void A_Critter2Atk()
 	{
 		if ( !target || !CheckMeleeRange() ) return;
 		int damage = random[Critter2](1,2)*2;
 		A_PlaySound("imp/melee",CHAN_WEAPON);
 		int newdam = target.DamageMobj(self,self,damage,"Melee");
 		target.TraceBleed(newdam>0?newdam:damage,self);
-		Vector2 bleeddir = target.Vec2To(invoker).unit();
+		Vector2 bleeddir = target.Vec2To(self).unit();
 		Vector3 bleedpos = target.pos+((cos(bleeddir.x)+sin(bleeddir.y))*target.radius,(sin(bleeddir.x)-cos(bleeddir.y))*target.radius,target.height*0.5);
 		target.SpawnBlood(bleedpos,atan2(bleeddir.y,bleeddir.x),newdam>0?newdam:damage);
 	}
@@ -396,6 +399,7 @@ Class mkCritter2 : mkCritter
 	{
 		//$Title Pinky Critter
 		//$Category Enemies
+		Tag "$T_CRIT2";
 		Health 50;
 		PainChance 150;
 		Scale 0.8;
@@ -416,6 +420,7 @@ Class mkCritter2 : mkCritter
 		mkCritter.MinSearch 50;
 		mkCritter.MaxSearch 100;
 		BloodColor "60 40 20";
+		Obituary "$CRIT2_OBITUARY";
 	}
 
 	override void PostBeginPlay()
@@ -447,19 +452,21 @@ Class mkCritter2 : mkCritter
 		CRI2 CDD 5 A_DoWander();
 		Loop;
 	Chase:
-		CRI2 A 3 { A_DoChase(); A_Step(-1); }
-		CRI2 ABB 3 A_DoChase();
-		CRI2 C 3 { A_DoChase(); A_Step(1); }
-		CRI2 CDD 3 A_DoChase();
+		CRI2 A 3 Fast { A_DoChase(); A_Step(-1); }
+		CRI2 ABB 3 Fast A_DoChase();
+		CRI2 C 3 Fast { A_DoChase(); A_Step(1); }
+		CRI2 CDD 3 Fast A_DoChase();
 		Loop;
 	Melee:
 		CRI2 E 0 A_PlaySound(MeleeSound,CHAN_WEAPON);
-		CRI2 E 9 { A_FaceTarget(); A_Recoil(-0.5); }
-		CRI2 FG 6 { A_Critter2Atk(); }
+		CRI2 E 9 A_FaceTarget();
+		CRI2 F 6 A_FaceTarget();
+		CRI2 G 6 A_Critter2Atk();
 		CRI2 G 0 A_JumpMove();
-		Goto Melee+1;
+		Loop;
 	Pain:
-		CRI2 H 10 A_Pain();
+		CRI2 H 2 A_Pain();
+		CRI2 H 8 A_Pain();
 		CRI2 H 0 A_JumpMove();
 		Goto Spawn;
 	Death:
@@ -485,32 +492,67 @@ Class mkCritter2 : mkCritter
 // Baron critter
 Class mkCritter3 : mkCritter
 {
-	int chargetimer;
+	int chargetimer, chargetimer2;
+	double bstr;
 
-	action void A_Critter3Atk()
+	void A_Critter3Atk()
 	{
 		if ( !target || !CheckMeleeRange() ) return;
-		int damage = random[Critter2](2,3)*2;
+		int damage = random[Critter3](2,3)*2;
 		A_PlaySound("imp/melee",CHAN_WEAPON);
 		int newdam = target.DamageMobj(self,self,damage,"Melee");
 		target.TraceBleed(newdam>0?newdam:damage,self);
-		Vector2 bleeddir = target.Vec2To(invoker).unit();
+		Vector2 bleeddir = target.Vec2To(self).unit();
 		Vector3 bleedpos = target.pos+((cos(bleeddir.x)+sin(bleeddir.y))*target.radius,(sin(bleeddir.x)-cos(bleeddir.y))*target.radius,target.height*0.5);
 		target.SpawnBlood(bleedpos,atan2(bleeddir.y,bleeddir.x),newdam>0?newdam:damage);
+	}
+
+	// turns out it can not be blocking
+	bool BlockingLineIsBlocking()
+	{
+		if ( !BlockingLine ) return false;
+		// one-sided
+		if ( !BlockingLine.sidedef[1] ) return true;
+		// blocks us
+		if ( BlockingLine.flags&(Line.ML_BLOCKING|Line.ML_BLOCKMONSTERS|Line.ML_BLOCKEVERYTHING) ) return true;
+		return false;
+	}
+
+	bool CheckCharge()
+	{
+		// check if we can move towards target without bumping into anything
+		Vector3 oldpos = pos;
+		double angdest = AngleTo(target);
+		Vector2 dir = (cos(angdest),sin(angdest));
+		for ( int i=0; i<25; i++ )
+		{
+			if ( TryMove(Vec2Offset(dir.x*speed*2,dir.y*speed*2),int(maxdropoffheight)) )
+				continue;
+			if ( BlockingMobj == target )
+				break;
+			if ( BlockingLineIsBlocking() || (BlockingMobj && BlockingMobj.bSOLID) )
+			{
+				SetOrigin(oldpos,false);
+				return false;
+			}
+		}
+		SetOrigin(oldpos,false);
+		return true;
 	}
 
 	Default
 	{
 		//$Title Bruiser Critter
 		//$Category Enemies
-		Health 200;
+		Tag "$T_CRIT3";
+		Health 100;
 		PainChance 100;
 		Scale 0.9;
 		Radius 20;
 		Height 56;
 		Speed 6;
 		Mass 500;
-		MeleeRange 50;
+		MeleeRange 40;
 		SeeSound "critter3/see";
 		PainSound "critter3/pain";
 		DeathSound "critter3/pain";
@@ -524,6 +566,8 @@ Class mkCritter3 : mkCritter
 		mkCritter.MaxSearch 120;
 		+BOSS;
 		BloodColor "20 20 20";
+		Obituary "$CRIT3_OBITUARY";
+		DamageFactor "Shot", 0.35;
 	}
 
 	override void PostBeginPlay()
@@ -532,13 +576,6 @@ Class mkCritter3 : mkCritter
 		viewparams.fov = 120;
 		viewparams.maxdist = 600;
 		viewparams.maxheardist = 1500;
-	}
-
-	override void Tick()
-	{
-		Super.Tick();
-		if ( InStateSequence(CurState,ResolveState("Charge")) ) speed = 12;
-		else speed = 6;
 	}
 
 	override bool SpecialBlastHandling( Actor source, double strength )
@@ -559,40 +596,130 @@ Class mkCritter3 : mkCritter
 		CRI3 CDD 5 A_DoWander();
 		Loop;
 	Chase:
-		CRI3 A 4 { A_DoChase(); A_Step(1); A_QuakeEx(3,3,3,8,0,500,"",QF_RELATIVE|QF_SCALEDOWN); }
-		CRI3 ABB 4 A_DoChase();
-		CRI3 C 4 { A_DoChase(); A_Step(-1); A_QuakeEx(3,3,3,8,0,500,"",QF_RELATIVE|QF_SCALEDOWN); }
-		CRI3 CDD 4 A_DoChase();
+		CRI3 A 4 Fast { A_DoChase(); A_Step(1); A_QuakeEx(3,3,3,8,0,500,"",QF_RELATIVE|QF_SCALEDOWN); }
+		CRI3 ABB 4 Fast A_DoChase();
+		CRI3 C 4 Fast { A_DoChase(); A_Step(-1); A_QuakeEx(3,3,3,8,0,500,"",QF_RELATIVE|QF_SCALEDOWN); }
+		CRI3 CDD 4 Fast A_DoChase();
 		CRI3 D 0
 		{
-			if ( CheckIfTargetInLOS(360,0,0,300) && (Random[Critter3](0,100) < 10) )
+			if ( CheckIfTargetInLOS(360,0,0,400) && (Random[Critter3](0,100) < 6) && CheckCharge() )
 				return ResolveState("Charge");
 			return ResolveState(null);
 		}
 		Loop;
 	Melee:
 		CRI3 F 0 A_Jump(128,"Melee2");
-		CRI3 F 8 { A_FaceTarget(); A_Recoil(-1.0); }
+		CRI3 F 8 A_FaceTarget();
 		CRI3 EF 5 A_FaceTarget();
 		CRI3 G 15 A_Critter3Atk();
 		CRI3 F 0 A_JumpMove();
 		Goto Melee2;
 	Melee2:
-		CRI3 Q 8 { A_FaceTarget(); A_Recoil(-1.0); }
+		CRI3 Q 8 A_FaceTarget();
 		CRI3 PQ 5 A_FaceTarget();
 		CRI3 R 15 A_Critter3Atk();
 		CRI3 Q 0 A_JumpMove();
 		Goto Melee+1;
 	Charge:
-		CRI3 H 10 { A_FaceTarget(); A_PlaySound(SeeSound,CHAN_WEAPON); chargetimer = Random[Critter3](4,8); }
-		CRI3 A 3 { A_DoChase(); A_Step(1); A_QuakeEx(4,4,4,10,0,600,"",QF_RELATIVE|QF_SCALEDOWN); }
-		CRI3 ABB 3 { A_DoChase(); }
-		CRI3 C 3 { A_DoChase(); A_Step(-1); A_QuakeEx(4,4,4,10,0,600,"",QF_RELATIVE|QF_SCALEDOWN); }
-		CRI3 CDD 3 { A_DoChase(); }
-		CRI3 D 0 { chargetimer--; if ( chargetimer <= 0 ) A_JumpMove(); }
+		CRI3 H 10 { A_FaceTarget(); A_PlaySound(SeeSound,CHAN_WEAPON); chargetimer = 4; chargetimer2 = Random[Critter3](15,25); }
+		CRI3 AABBCCDD 3 Fast
+		{
+			if ( Random[CritterMove]() < 3 ) PlayActiveSound();
+			if ( chargetimer == 4 )
+			{
+				A_Step(1);
+				A_QuakeEx(4,4,4,10,0,600,"",QF_RELATIVE|QF_SCALEDOWN);
+			}
+			else if ( chargetimer == 8 )
+			{
+				A_Step(-1);
+				A_QuakeEx(4,4,4,10,0,600,"",QF_RELATIVE|QF_SCALEDOWN);
+				chargetimer = 0;
+			}
+			chargetimer++;
+			A_FaceTarget(3);
+			Vector2 dir = (cos(angle),sin(angle));
+			bool moved = TryMove(pos.xy+dir*speed*2,int(maxdropoffheight));
+			if ( BlockingMobj && BlockingMobj.bSOLID )
+			{
+				Actor victim = BlockingMobj;
+				int dmg = Random[Critter3](4,6)*2;
+				if ( victim is 'mkCritter3' ) dmg = 0;
+				if ( victim.bSHOOTABLE )
+				{
+					victim.DamageMobj(self,self,dmg,'Slam',DMG_THRUSTLESS);
+					Vector3 dirto = Vec3To(victim).unit();
+					victim.vel.xy = dirto.xy*(800./victim.mass);
+					victim.vel.z = (300./victim.mass);
+				}
+				A_PlaySound("crowbar/enemy",CHAN_6);
+				A_QuakeEx(6,6,6,10,0,500,"",QF_RELATIVE|QF_SCALEDOWN,falloff:200);
+				vel.xy = RotateVector((-8,0),angle);
+				vel.z = 4;
+				return ResolveState("Recoil");
+			}
+			if ( !moved )
+			{
+				A_PlaySound("crowbar/enemy",CHAN_6);
+				A_QuakeEx(6,6,6,10,0,500,"",QF_RELATIVE|QF_SCALEDOWN,falloff:200);
+				vel.xy = RotateVector((-8,0),angle);
+				vel.z = 4;
+				return ResolveState("PainRecoil");
+			}
+			if ( abs(DeltaAngle(angle,AngleTo(target))) > 90 ) chargetimer2 = min(chargetimer2,2);
+			return ResolveState(null);
+		}
+		CRI3 D 0
+		{
+			chargetimer2--;
+			if ( chargetimer2 <= 0 )
+				return ResolveState("Brake");
+			return ResolveState(null);
+		}
 		Goto Charge+1;
+	Brake:
+		CRI3 A 0
+		{
+			chargetimer = 0;
+			bstr = speed*0.8;
+			vel.xy = RotateVector((bstr,0),angle);
+			A_PlaySound(StepSound,CHAN_7);
+		}
+		CRI3 A 1
+		{
+			if ( !(chargetimer%3) && (vel.length() > 2) )
+			{
+				Vector3 ofs = (0,0,8);
+				ofs.xy = RotateVector((FeetDist,0),angle+90);
+				Spawn("LesserPuff",pos+ofs);
+				ofs.xy = RotateVector((FeetDist,0),angle-90);
+				Spawn("LesserPuff",pos+ofs);
+			}
+			chargetimer++;
+			A_FaceTarget(3);
+			vel.xy = vel.xy*0.8+RotateVector((bstr,0)*0.2,angle);
+			bstr *= 0.95;
+			if ( vel.xy.length() <= 1 )
+				A_JumpMove(false);
+		}
+		Wait;
+	Recoil:
+		CRI3 A 30;
+		CRI3 A 1 A_JumpIf(vel.length()<1,1);
+		Wait;
+		CRI3 A 0 A_JumpMove(false);
+		Goto Spawn;
+	PainRecoil:
+		CRI3 H 2;
+		CRI3 H 8 A_Pain();
+		CRI3 A 20;
+		CRI3 A 1 A_JumpIf(vel.length()<1,1);
+		Wait;
+		CRI3 A 0 A_JumpMove(false);
+		Goto Spawn;
 	Pain:
-		CRI3 H 10 A_Pain();
+		CRI3 H 2;
+		CRI3 H 8 A_Pain();
 		CRI3 H 0 A_JumpMove(false);
 		Goto Spawn;
 	Death:
@@ -626,7 +753,7 @@ Class mkFire : Actor
 		+DONTSPLASH;
 		Alpha 0.5;
 	}
-	action void A_LesserFires()
+	void A_LesserFires()
 	{
 		tics = int(scale.x*3);
 		if ( tics == 0 ) return;
@@ -634,12 +761,17 @@ Class mkFire : Actor
 		a = Spawn("mkFire",pos+(FRandom[Fires](-8*scale.x,8*scale.x),FRandom[Fires](-8*scale.x,8*scale.x),FRandom[Fires](0,16*scale.x)));
 		a.scale = scale*0.65;
 		a.alpha = alpha*0.65;
+		a.SetStateLabel("Lesser");
 	}
 	States
 	{
 	Spawn:
 		FIR4 A 0 NoDelay A_PlaySound("vile/firecrkl",volume:scale.x);
 		FIR4 ABCDEFGH 3 Bright Light("PurpleFire") A_LesserFires();
+		Stop;
+	Lesser:
+		FIR4 A 0 NoDelay A_PlaySound("vile/firecrkl",volume:scale.x);
+		FIR4 ABCDEFGH 3 Bright A_LesserFires();
 		Stop;
 	}
 }
@@ -693,6 +825,7 @@ Class mkEmberLight : DynamicLight
 			Destroy();
 			return;
 		}
+		SetOrigin(target.pos,true);
 		double phase = (13-target.frame)/13.0;
 		args[LIGHT_RED] = int(64*phase);
 		args[LIGHT_BLUE] = int(64*phase);
@@ -739,6 +872,7 @@ Class mkFireball : Actor
 		Radius 4;
 		Height 4;
 		Speed 3;
+		FastSpeed 5;
 		Scale 0.5;
 		DamageFunction Random[Fireball](1,2);
 		DamageType "DarkFire";
@@ -757,7 +891,7 @@ Class mkFireball : Actor
 		-NOGRAVITY;
 		+USEBOUNCESTATE;
 	}
-	action void A_TrackNearestPlayer()
+	void A_TrackNearestPlayer()
 	{
 		vel.z = speed*0.85;
 		Actor a = null;
@@ -765,7 +899,7 @@ Class mkFireball : Actor
 		for ( int i=0; i<MAXPLAYERS; i++ )
 		{
 			if ( !playeringame[i] ) continue;
-			dist = invoker.Distance2D(players[i].mo);
+			dist = Distance2D(players[i].mo);
 			if ( (mindist == -1) || (dist < mindist) )
 			{
 				mindist = dist;
@@ -773,7 +907,7 @@ Class mkFireball : Actor
 			}
 		}
 		if ( !a ) return;
-		Vector2 newdir = invoker.Vec2To(a).unit();
+		Vector2 newdir = Vec2To(a).unit();
 		double newang = atan2(newdir.y,newdir.x);
 		vel.xy = newdir*speed*1.3;
 		A_SetAngle(newang);
@@ -821,11 +955,11 @@ Class mkFireball2 : Actor
 		-NOBLOCKMAP;
 		+NOBLOOD;
 	}
-	action void A_BurstIntoLotsOfTreats()
+	void A_BurstIntoLotsOfTreats()
 	{
 		double ang, pt;
 		Vector3 dir;
-		for ( int i=0; i<5; i++ )
+		for ( int i=0; i<4; i++ )
 		{
 			ang = FRandom[Fireball](0,360);
 			pt = FRandom[Fireball](-90,90);
@@ -833,7 +967,7 @@ Class mkFireball2 : Actor
 			let s = Spawn("mkSmoketrail",pos);
 			s.vel = dir*FRandom[Fireball](0.5,3.0);
 		}
-		for ( int i=0; i<10; i++ )
+		for ( int i=0; i<8; i++ )
 		{
 			ang = FRandom[Fireball](0,360);
 			pt = FRandom[Fireball](-90,90);
@@ -841,7 +975,7 @@ Class mkFireball2 : Actor
 			let e = Spawn("mkEmber",pos);
 			e.vel = dir*FRandom[Fireball](0.5,8.0);
 		}
-		int n = 5;
+		int n = 4;
 		if ( mkCritter4(target) ) n = int(n/mkCritter4(target).HealthFact());
 		for ( int i=0; i<n; i++ )
 		{
@@ -938,24 +1072,27 @@ Class mkCritter4 : mkCritter
 		return n;
 	}
 
-	action void A_ResetTimer()
+	void A_ResetTimer()
 	{
-		invoker.attacktimer = int(Random[Critter4](15,25)*invoker.HealthFact());
+		attacktimer = int(Random[Critter4](20,30)*HealthFact());
 	}
 
-	action void A_CountTimer( int val = 1 )
+	void A_CountTimer( int val = 1 )
 	{
 		bool clearway = true;
-		for ( int i=1; i<=4; i++ )
+		Vector3 oldpos = pos;
+		Vector2 dir = (cos(angle),sin(angle))*speed;
+		for ( int i=0; i<4; i++ )
 		{
-			clearway = Warp(self,speed*i,0,0,angle,WARPF_TESTONLY|WARPF_ABSOLUTEANGLE);
+			clearway = TryMove(Vec2Offset(dir.x,dir.y),int(maxdropoffheight));
 			if ( !clearway ) break;
 		}
-		if ( ((invoker.attacktimer-=val) <= 0) && clearway ) SetStateLabel("Attack");
+		SetOrigin(oldpos,false);
+		if ( ((attacktimer-=val) <= 0) && clearway ) SetStateLabel("Attack");
 	}
 
 	// spawn flames on vile critter's hands
-	action void A_FireHands()
+	void A_FireHands()
 	{
 		Vector2 fpos;
 		fpos = pos.xy+(cos(angle+50),sin(angle+50))*50;
@@ -964,10 +1101,10 @@ Class mkCritter4 : mkCritter
 		Spawn("mkFire",(fpos.x,fpos.y,pos.z+8));
 	}
 
-	action void A_Attack()
+	void A_Attack()
 	{
 		int decision = Random[Critter4](1,100);
-		int summonchance = int(30+30*(1.0-invoker.HealthFact()));
+		int summonchance = int(30+30*(1.0-HealthFact()));
 		if ( decision <= summonchance )
 		{
 			if ( !A_DoSummon() )
@@ -983,24 +1120,24 @@ Class mkCritter4 : mkCritter
 
 	// pick possible spawn spots for bringing in critters
 	// returns false if it went over budget
-	action bool A_DoSummon()
+	bool A_DoSummon()
 	{
-		invoker.ShuffleSpots();
+		ShuffleSpots();
 		int n;
 		Class<mkCritter> kind;
 		int decision = Random[Critter4](1,100);
 		int current, requested;
-		current = invoker.NumChildren();
+		current = NumChildren();
 		if ( decision <= 50 )
 		{
 			kind = "mkCritter1";
-			n = min(int(2/invoker.HealthFact()),invoker.spots.size());
+			n = min(int(2/HealthFact()),spots.size());
 			requested = n;
 		}
 		else if ( decision <= 80 )
 		{
 			kind = "mkCritter2";
-			n = min(int(1/invoker.HealthFact()),invoker.spots.size());
+			n = min(int(1/HealthFact()),spots.size());
 			requested = n*3;
 		}
 		else
@@ -1016,7 +1153,7 @@ Class mkCritter4 : mkCritter
 		for ( int i=0; i<n; i++ )
 		{
 			isblocked = false;
-			bt = BlockThingsIterator.Create(invoker.spots[i],16);
+			bt = BlockThingsIterator.Create(spots[i],16);
 			while ( bt.Next() )
 			{
 				if ( bt.Thing && !bt.Thing.bKILLED )
@@ -1026,29 +1163,29 @@ Class mkCritter4 : mkCritter
 				}
 			}
 			if ( isblocked ) continue;
-			Spawn("mkFire",invoker.spots[i].pos+(0,0,8));
-			mkCritter c = mkCritter(Spawn(kind,invoker.spots[i].pos));
-			c.angle = invoker.spots[i].angle;
-			c.master = invoker;
+			Spawn("mkFire",spots[i].pos+(0,0,8));
+			mkCritter c = mkCritter(Spawn(kind,spots[i].pos));
+			c.angle = spots[i].angle;
+			c.master = self;
 			c.ChangeTid(tid);
 		}
 		return true;
 	}
 
 	// spawns a swarm of seeking fireballs from hand fires
-	action void A_DoFire()
+	void A_DoFire()
 	{
 		Vector2 fpos;
 		fpos = pos.xy+(cos(angle+50),sin(angle+50))*50;
 		Actor a;
-		int num = int(3/invoker.HealthFact());
+		int num = int(2/HealthFact());
 		for ( int i=0; i<num; i++ )
 		{
 			a = Spawn("mkFireball",(fpos.x,fpos.y,pos.z+16));
 			a.angle = FRandom[Critter4](0,360);
 			a.pitch = FRandom[Critter4](-60,30);
-			a.target = invoker;
-			a.master = invoker;
+			a.target = self;
+			a.master = self;
 			a.ChangeTid(tid);
 		}
 		fpos = pos.xy+(cos(angle-50),sin(angle-50))*50;
@@ -1057,24 +1194,24 @@ Class mkCritter4 : mkCritter
 			a = Spawn("mkFireball",(fpos.x,fpos.y,pos.z+16));
 			a.angle = FRandom[Critter4](0,360);
 			a.pitch = FRandom[Critter4](-60,30);
-			a.target = invoker;
-			a.master = invoker;
+			a.target = self;
+			a.master = self;
 			a.ChangeTid(tid);
 		}
 	}
 
 	// spawns large seeking fireballs from at least 3 spawn spots
-	action void A_DoFire2()
+	void A_DoFire2()
 	{
-		invoker.ShuffleSpots();
-		int n = min(int(2/invoker.HealthFact()),invoker.spots.size());
+		ShuffleSpots();
+		int n = min(int(2/HealthFact()),spots.size());
 		Actor a;
 		for ( int i=0; i<n; i++ )
 		{
-			Spawn("mkFire",invoker.spots[i].pos+(0,0,8));
-			a = Spawn("mkFireball2",invoker.spots[i].pos+(0,0,16));
-			a.target = invoker;
-			a.master = invoker;
+			Spawn("mkFire",spots[i].pos+(0,0,8));
+			a = Spawn("mkFireball2",spots[i].pos+(0,0,16));
+			a.target = self;
+			a.master = self;
 			a.ChangeTid(tid);
 		}
 	}
@@ -1082,22 +1219,22 @@ Class mkCritter4 : mkCritter
 	// kill all other critters in the map on death
 	// along with any leftover fireballs
 	// if there's other vile critters around, only kill own summons
-	action void A_KillCritters()
+	void A_KillCritters()
 	{
 		int others = 0;
 		ThinkerIterator t = ThinkerIterator.Create("mkCritter4");
 		mkCritter4 c;
 		while ( c = mkCritter4(t.Next()) )
 		{
-			if ( c == invoker ) continue;
+			if ( c == self ) continue;
 			if ( !c.bKILLED ) others++;
 		}
 		t = ThinkerIterator.Create("Actor");
 		Actor a;
 		while ( a = Actor(t.Next()) )
 		{
-			if ( a.species != invoker.species ) continue;
-			if ( a == invoker || a.bKILLED ) continue;
+			if ( a.species != species ) continue;
+			if ( a == self || a.bKILLED ) continue;
 			if ( others && (a.master != self) ) continue;
 			if ( a.bMISSILE ) a.ExplodeMissile();
 			else a.Die(null,null);
@@ -1140,6 +1277,7 @@ Class mkCritter4 : mkCritter
 	{
 		//$Title Vile Critter
 		//$Category Enemies/Bosses
+		Tag "$T_CRIT4";
 		Health 600;
 		PainChance 255;
 		Scale 1.0;
@@ -1161,28 +1299,30 @@ Class mkCritter4 : mkCritter
 		+THRUSPECIES;
 		BloodColor "10 10 10";
 		Activation THINGSPEC_ThingActs;	// vile critters activate their own death specials
+		Obituary "$CRIT4_OBITUARY";
 	}
 
 	States
 	{
 	Spawn:
-		CRI4 A 0 NoDelay A_JumpIf(Invoker.initialattack,"InitialAttack");
-		CRI4 A 4;
-		CRI4 A 2 { A_StartWander(); A_CountTimer(); }
+		CRI4 A 0 NoDelay A_JumpIf(initialattack,"InitialAttack");
+		CRI4 A 4 Fast;
+		CRI4 A 2 Fast { A_StartWander(); A_CountTimer(); }
 		Wait;
 	Wander:
-		CRI4 A 4 { A_DoWander(); A_Step(-1); A_CountTimer(); A_SetTics(int(ceil(4*invoker.HealthFact()))); }
-		CRI4 ABBCC 4 { A_DoWander(); A_SetTics(int(ceil(3*invoker.HealthFact()))); }
-		CRI4 D 4 { A_DoWander(); A_Step(1); A_CountTimer(); A_SetTics(int(ceil(4*invoker.HealthFact()))); }
-		CRI4 DEEFF 4 { A_DoWander(); A_SetTics(int(ceil(3*invoker.HealthFact()))); }
+		CRI4 A 4 Fast { A_DoWander(); A_Step(-1); A_CountTimer(); A_SetTics(int(ceil(4*HealthFact()))); }
+		CRI4 ABBCC 4 Fast { A_DoWander(); A_SetTics(int(ceil(3*HealthFact()))); }
+		CRI4 D 4 Fast { A_DoWander(); A_Step(1); A_CountTimer(); A_SetTics(int(ceil(4*HealthFact()))); }
+		CRI4 DEEFF 4 Fast { A_DoWander(); A_SetTics(int(ceil(3*HealthFact()))); }
 		Loop;
 	Pain:
-		CRI4 G 10 A_Pain();
+		CRI4 G 2;
+		CRI4 G 8 A_Pain();
 		CRI4 G 0 A_CountTimer(5);
 		CRI4 G 0 A_JumpMove(false);
 		Goto Spawn;
 	InitialAttack:
-		CRI4 T 4 { Invoker.initialattack = false; PainChance = 0; A_SetRenderStyle(0.0,STYLE_Translucent); }
+		CRI4 T 4 { initialattack = false; PainChance = 0; A_SetRenderStyle(0.0,STYLE_Translucent); }
 		CRI4 TTTTTTTTTT 4 A_FadeIn(0.1);
 		CRI4 T 0 A_SetRenderStyle(1.0,STYLE_Normal);
 		CRI4 T 15 A_PlaySound(SeeSound,CHAN_VOICE);
@@ -1224,10 +1364,11 @@ Class mkLurker : Actor
 	{
 		//$Title Lurker
 		//$Category Enemies/Special
+		Tag "$T_LURK";
 		Radius 16;
 		Height 32;
 		Speed 3;
-		Health 0x7fffffff;
+		Health int.max;
 		MeleeRange 30;
 		RenderStyle "None";
 		MONSTER;
@@ -1243,16 +1384,30 @@ Class mkLurker : Actor
 		+NOTONAUTOMAP;
 		+THRUACTORS;
 		-SHOOTABLE;
+		Obituary "$LURK_OBITUARY";
 	}
-	action void A_Step()
+	void A_Step()
 	{
-		invoker.stepcount++;
-		if ( invoker.stepcount%50 ) return;
+		stepcount++;
+		if ( stepcount%50 ) return;
 		A_PlaySound("lurker/step",CHAN_BODY,0.3,attenuation:3.0);
 	}
-	action void A_Lurk()
+	bool ItsLit( Actor a )
 	{
-		if ( !invoker.active ) return;
+		bool unlit = true;
+		for ( int i=0; i<lights.size(); i++ )
+		{
+			if ( a.Distance2D(lights[i]) < lights[i].args[3]*2 )
+			{
+				unlit = false;
+				break;
+			}
+		}
+		return unlit;
+	}
+	void A_Lurk()
+	{
+		if ( !active ) return;
 		Vector2 wanderdir = (cos(angle),sin(angle));
 		if ( !TryMove(pos.xy+wanderdir*speed,false) ) A_SetAngle(angle+180,SPF_INTERPOLATE);
 		A_SetAngle(angle+FRandom[Lurk](-10.0,10.0),SPF_INTERPOLATE);
@@ -1260,12 +1415,12 @@ Class mkLurker : Actor
 		// don't wander into the light
 		Vector2 reldir;
 		DynamicLight l;
-		for ( int i=0; i<invoker.lights.size(); i++ )
+		for ( int i=0; i<lights.size(); i++ )
 		{
-			l = invoker.lights[i];
-			if ( invoker.Distance2D(l) < l.args[3]*2 )
+			l = lights[i];
+			if ( Distance2D(l) < l.args[3]*2 )
 			{
-				reldir = l.Vec2To(invoker);
+				reldir = l.Vec2To(self);
 				A_SetAngle(atan2(reldir.y,reldir.x),SPF_INTERPOLATE);
 				break;
 			}
@@ -1274,25 +1429,15 @@ Class mkLurker : Actor
 		bool unlit;
 		for ( int j=0; j<MAXPLAYERS; j++ )
 		{
-			if ( !playeringame[j] || (players[j].mo.CurSector != invoker.CurSector) || (players[j].mo.Health <= 0) )
+			if ( !playeringame[j] || (players[j].mo.CurSector != CurSector) || (players[j].mo.Health <= 0) )
 				continue;
-			unlit = true;
-			for ( int i=0; i<invoker.lights.size(); i++ )
-			{
-				l = invoker.lights[i];
-				if ( players[j].mo.Distance2D(l) < l.args[3]*2 )
-				{
-					unlit = false;
-					break;
-				}
-			}
-			if ( !unlit ) continue;
+			if ( !ItsLit(players[j].mo) ) continue;
 			target = players[j].mo;
 			SetStateLabel("See");
 			break;
 		}
 	}
-	action void A_Approach()
+	void A_Approach()
 	{
 		if ( !target )
 		{
@@ -1300,7 +1445,7 @@ Class mkLurker : Actor
 			return;
 		}
 		// approach player
-		Vector2 approachdir = invoker.Vec2To(target).unit();
+		Vector2 approachdir = Vec2To(target).unit();
 		A_SetAngle(atan2(approachdir.y,approachdir.x));
 		TryMove(pos.xy+approachdir*speed,false);
 		A_Step();
@@ -1310,34 +1455,25 @@ Class mkLurker : Actor
 			return;
 		}
 		// walk away if player leaves sector or dies
-		if ( (target.CurSector != invoker.CurSector) || (target.Health <= 0) )
+		if ( (target.CurSector != CurSector) || (target.Health <= 0) )
 		{
 			target = null;
 			SetStateLabel("Spawn");
 			return;
 		}
 		// walk away if player becomes lit or leaves sector
-		bool unlit = true;
-		DynamicLight l;
-		for ( int i=0; i<invoker.lights.size(); i++ )
-		{
-			l = invoker.lights[i];
-			if ( target.Distance2D(l) < l.args[3]*2 )
-			{
-				unlit = false;
-				break;
-			}
-		}
-		if ( unlit ) return;
+		if ( ItsLit(target) ) return;
 		target = null;
 		A_SetAngle(angle+180,SPF_INTERPOLATE);
 		SetStateLabel("Spawn");
 	}
-	action void A_Attack()
+	void A_Attack()
 	{
-		target.DamageMobj(self,self,0x7fffffff,'Massacre');
-		target.vel *= 0;
-		A_FaceTarget();
+		if ( (target.CurSector == CurSector) && (target.Health > 0) && !ItsLit(target) )
+		{
+			target.DamageMobj(self,self,int.max,'Massacre',DMG_FORCED|DMG_THRUSTLESS);
+			A_FaceTarget();
+		}
 		target = null;
 		A_SetAngle(angle+180,SPF_INTERPOLATE);
 	}
@@ -1368,6 +1504,7 @@ Class mkLurker : Actor
 		LURK A 1 A_Approach();
 		Wait;
 	Melee:
+		LURK A 40 Fast A_PlaySound("lurk/attack",CHAN_VOICE,0.4,attenuation:2.0);
 		LURK A 1 A_Attack();
 		Goto Spawn;
 	}

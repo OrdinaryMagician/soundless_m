@@ -1,10 +1,18 @@
 Scuba Steve - Knife sprites.
-JoeyTD - Angled pistol sprites.
+??? - Pistol right handed / reloading sprites.
 Xatrix Entertainment (Redneck Rampage) - Base crowbar sprites.
 Team Silent, Akira Yamaoka - Various assorted Silent Hill sounds.
 id Software - Original critter sprites.
 Epic Games - Gib and bullet sounds.
 ZZYZX - Slope alignment code.
+Jimmy - Status Report fonts.
+lol - .flow sounds.
+Haversine - SCP-087 fangame assets.
 
 Textures were scavenged from random UT99 texture packs, so I have no idea who
 made all of them. Hit me up if you know.
+
+I also haven't been able to track down who exactly made the pistol sprites.
+The mod I got them from only listed all authors in a big cluster, without
+specifying who made what.
+

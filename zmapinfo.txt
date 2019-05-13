@@ -1,7 +1,7 @@
 gameinfo
 {
 	PlayerClasses = "JohnDoe"
-	AddEventHandlers = "ShaderHandler", "MapHandler"
+	AddEventHandlers = "ShaderHandler", "StaticMapHandler", "MapHandler"
 	StatusbarClass = "mkStatBar"
 	MapArrow = "maparrows/playertri.txt"
 	Border = 0, 0, "nothing", "nothing", "nothing", "nothing", "nothing", "nothing", "nothing", "nothing"
@@ -33,13 +33,27 @@ skill hard
 	Name = "Hardcore"
 	SpawnFilter = 4
 	ACSReturn = 4
-	DamageFactor = 1.5
-	MonsterHealth = 1.25
+	DamageFactor = 1.25
 	MustConfirm = "If you seek a real challenge.\
 \
 Enemies will be much stronger and resources more scarce.\
 \
 Cheats are disabled."
+	DisableCheats
+}
+skill veryhard
+{
+	Name = "Death Wish"
+	SpawnFilter = 5
+	ACSReturn = 5
+	DamageFactor = 1.5
+	FastMonsters
+	MustConfirm = "Only the strongest will beat this.\
+\
+You will face much greater challenges.\
+\
+Cheats are disabled.\
+Save squares are disabled."
 	DisableCheats
 }
 
@@ -93,6 +107,8 @@ DoomEdNums
 	6013 = mkKey6
 	6014 = mkKey7
 	6015 = mkKey8
+	6029 = mkKey9
+	6030 = mkKeyA
 	// enemies
 	6016 = mkCritter1
 	6017 = mkCritter2
@@ -107,6 +123,7 @@ DoomEdNums
 	6024 = mkFlatNote
 	6025 = mkFogMaker
 	6026 = mkRainMaker
+	6028 = mkMirrorMan
 }
 
 Automap
@@ -116,7 +133,7 @@ Automap
 	Background = "80 80 80"
 	YourColor = "80 00 00"
 	WallColor = "00 00 00"
-	TwoSidedWallColor = "80 80 80"
+	TwoSidedWallColor = "70 70 70"
 	FloorDiffWallColor = "60 60 60"
 	CeilingDiffWallColor = "60 60 60"
 	ExtraFloorWallColor = "60 60 60"

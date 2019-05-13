@@ -8,7 +8,7 @@ Class mkBlood : Actor
 		+NOTELEPORT;
 		+PUFFGETSOWNER;
 	}
-	action void A_Bleed( int str = 1 )
+	void A_Bleed( int str = 1 )
 	{
 		if ( !target ) return;
 		let b = Spawn("mkBloodSpray",pos);
@@ -97,18 +97,18 @@ Class mkBloodDrop : Actor
 	int deadtimer;
 	Color stepcolor;
 
-	action void A_SetToSlope( double dang )
+	void A_SetToSlope( double dang )
 	{
-		vector3 fnormal = invoker.CurSector.floorplane.Normal;
+		vector3 fnormal = CurSector.floorplane.Normal;
 		vector2 fnormalp1 = ((fnormal.x != 0) || (fnormal.y != 0))?(fnormal.x,fnormal.y).Unit():(0,0);
 		vector2 fnormalp2 = ((fnormal.x,fnormal.y).Length(),fnormal.z);
 		double fang = atan2(fnormalp1.y,fnormalp1.x); // floor angle (not pitch!)
 		double fpitch = atan2(fnormalp2.x,fnormalp2.y); // floor pitch
 		double ddiff1 = cos(fang-(dang-90));
 		double ddiff2 = cos(fang-dang);
-		invoker.pitch = -fpitch*ddiff2;
-		invoker.roll = fpitch*ddiff1;
-		invoker.angle = dang;
+		pitch = -fpitch*ddiff2;
+		roll = fpitch*ddiff1;
+		angle = dang;
 	}
 
 	Default
@@ -276,17 +276,17 @@ Class mkFlyingGib : Actor
 		A_SetRoll(roll+rollvel,SPF_INTERPOLATE);
 	}
 
-	action void A_CorpseBleed()
+	void A_CorpseBleed()
 	{
 		let b = Spawn("mkBloodPool",pos);
 		b.translation = translation;
-		b.master = invoker;
-		mkBloodPool(b).stepcolor = invoker.stepcolor;
+		b.master = self;
+		mkBloodPool(b).stepcolor = stepcolor;
 		mkBloodPool(b).accel = 0.0005;
 		A_QueueCorpse();
 	}
 
-	action void A_Bleed()
+	void A_Bleed()
 	{
 		double ang;
 		double pt;
@@ -299,7 +299,7 @@ Class mkFlyingGib : Actor
 			dir = (cos(pt)*cos(ang),cos(pt)*sin(ang),sin(-pt));
 			b.vel = dir*FRandom[Gibs](0.3,2.2)*vel.length();
 			b.translation = translation;
-			mkBloodDrop(b).stepcolor = invoker.stepcolor;
+			mkBloodDrop(b).stepcolor = stepcolor;
 		}
 	}
 
@@ -351,18 +351,18 @@ Class mkBloodPool : Actor
 
 	Property ScaleAccel: accel;
 
-	action void A_SetToSlope( double dang )
+	void A_SetToSlope( double dang )
 	{
-		vector3 fnormal = invoker.CurSector.floorplane.Normal;
+		vector3 fnormal = CurSector.floorplane.Normal;
 		vector2 fnormalp1 = ((fnormal.x != 0) || (fnormal.y != 0))?(fnormal.x,fnormal.y).Unit():(0,0);
 		vector2 fnormalp2 = ((fnormal.x,fnormal.y).Length(),fnormal.z);
 		double fang = atan2(fnormalp1.y,fnormalp1.x); // floor angle (not pitch!)
 		double fpitch = atan2(fnormalp2.x,fnormalp2.y); // floor pitch
 		double ddiff1 = cos(fang-(dang-90));
 		double ddiff2 = cos(fang-dang);
-		invoker.pitch = -fpitch*ddiff2;
-		invoker.roll = fpitch*ddiff1;
-		invoker.angle = dang;
+		pitch = -fpitch*ddiff2;
+		roll = fpitch*ddiff1;
+		angle = dang;
 	}
 
 	override void PostBeginPlay()

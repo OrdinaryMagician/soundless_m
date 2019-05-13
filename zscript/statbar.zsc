@@ -3,7 +3,6 @@
 Class mkStatBar : BaseStatusBar
 {
 	HUDFont mBaseFont, mTinyFont, mSmallFont;
-	InventoryBarState InvBar;
 	DynamicValueInterpolator HealthInter;
 	Inventory LastSelected;
 
@@ -16,7 +15,6 @@ Class mkStatBar : BaseStatusBar
 		mTinyFont = HUDFont.Create(f);
 		mSmallFont = HUDFont.Create(SmallFont);
 		SetSize(0,320,200);
-		InvBar = InventoryBarState.CreateNoBox(mTinyFont,leftgfx:"",rightgfx:"");
 		HealthInter = DynamicValueInterpolator.Create(0,0.25,1,4);
 		LastSelected = null;
 	}
@@ -53,7 +51,6 @@ Class mkStatBar : BaseStatusBar
 		let scale = GetHUDScale();
 		double textdist = 8./scale.Y;
 		int height = SmallFont.GetHeight();
-		String printtext;
 		int SCREENWIDTH = screen.GetWidth();
 		int crdefault = Font.CR_GREY;
 		int highlight = Font.CR_UNTRANSLATED;
@@ -63,26 +60,19 @@ Class mkStatBar : BaseStatusBar
 		let width = SmallFont.StringWidth("00:00:00");
 		if ( am_showtime )
 		{
-			printtext = level.TimeFormatted();
 			DrawString(mSmallFont,level.TimeFormatted(),(-textdist-width,y),0,crdefault);
 			y += height;
 		}
 		if ( am_showtotaltime ) DrawString(mSmallFont,level.TimeFormatted(true),(-textdist-width,y),0,crdefault);
 		y = textdist;
-		// Draw monster count
-		if ( am_showmonsters )
-		{
-			DrawString(mSmallFont, String.Format("%s\34%c %d/%d", Stringtable.Localize("$AM_MONSTERS"), crdefault+65, level.killed_monsters, level.total_monsters), (textdist, y), 0, highlight);
-			y += height;
-		}
 		// Draw room count
 		if ( am_showsecrets )
 		{
-			DrawString(mSmallFont, String.Format("%s\34%c %d/%d", Stringtable.Localize("$AM_ROOMS"), crdefault+65, level.found_secrets, level.total_secrets), (textdist, y), 0, highlight);
+			DrawString(mSmallFont,String.Format("%s\34%c %d/%d",Stringtable.Localize("$AM_ROOMS"),crdefault+65,level.found_secrets,level.total_secrets),(textdist,y),0,highlight);
 			y += height;
 		}
 		// Draw item count
-		if ( am_showitems ) DrawString(mSmallFont, String.Format("%s\34%c %d/%d", Stringtable.Localize("$AM_ITEMS"), crdefault+65, level.found_items, level.total_items), (textdist, y), 0, highlight);
+		if ( am_showitems ) DrawString(mSmallFont,String.Format("%s\34%c %d/%d",Stringtable.Localize("$AM_ITEMS"),crdefault+65,level.found_items,level.total_items),(textdist,y),0,highlight);
 	}
 	override void NewGame()
 	{

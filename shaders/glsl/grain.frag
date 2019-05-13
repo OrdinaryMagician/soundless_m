@@ -1,11 +1,11 @@
 /* Complex grain shader ported over from MariENB */
-const float ni = 0.035;
+const float ni = 0.012;
 const float nf = 0.000005;
 const vec3 nm1 = vec3(2.05,3.11,2.22);
 const float nk = 0.04;
 const vec3 nm2 = vec3(4.25,9.42,6.29);
 const float ns = -0.28;
-const float np = 3.35;
+const float np = 4.25;
 const float bnp = 15.6;
 
 #define darkmask(a,b) (a>0.5)?(2.0*a*(0.5+b)):(1.0-2.0*(1.0-a)*(1.0-((0.5+b))))

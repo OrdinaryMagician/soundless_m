@@ -48,6 +48,7 @@ HardwareShader PostProcess scene
 	Uniform int dotint
 	Uniform int doblur
 	Uniform int dolow
+	Uniform vec2 lowres
 	Shader "shaders/glsl/otherworld.frag" 330
 }
 HardwareShader PostProcess scene
@@ -62,8 +63,8 @@ HardwareShader PostProcess scene
 	Name "retro"
 	Shader "shaders/glsl/retro.frag" 330
 	Uniform int dolow
-	Uniform int dodither
 	Uniform int dopos
+	Uniform vec2 lowres
 	Texture DitherTexture "textures/dither.png"
 }
 // otherworld vibrating/bleeding textures
@@ -84,4 +85,36 @@ HardwareShader Texture txb_0119
 HardwareShader Texture txo_0148
 {
 	Shader "shaders/glsl/redtex.frag" 330
+}
+// textures with normalmaps
+Material Texture 87door
+{
+	Normal "textures/087/87dor_n.png"
+	Specular "textures/087/87dor_s.png"
+}
+Material Texture 87floor
+{
+	Normal "textures/087/87flr_n.png"
+	Specular "textures/087/87flr_s.png"
+}
+Material Texture 87floor2
+{
+	Normal "textures/087/87flr_n.png"
+	Specular "textures/087/87flr_s.png"
+}
+Material Texture 87rail
+{
+	Normal "textures/087/87rai_n.png"
+	Specular "textures/087/87rai_s.png"
+}
+Material Texture 87wall
+{
+	Normal "textures/087/87wll_n.png"
+	Specular "textures/087/87wll_s.png"
+}
+
+brightmap sprite MRMNA0
+{
+	map "brightmaps/MRMNA0.png"
+	disablefullbright
 }

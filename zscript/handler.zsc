@@ -1,0 +1,433 @@
+// gross hack tokens for manual save effects
+Class LoadedGameToken : Inventory
+{
+	int tcnt;
+
+	override void Tick()
+	{
+		Super.Tick();
+		tcnt++;
+		if ( tcnt > 5 ) Destroy();
+	}
+}
+Class SavedGameToken : Inventory
+{
+	int tcnt;
+
+	override void Tick()
+	{
+		Super.Tick();
+		tcnt++;
+		if ( tcnt > 5 ) Destroy();
+	}
+}
+
+Class Steppy
+{
+	Vector2 pos;
+	double angle, alpha;
+	bool flip;
+
+	bool OnScreen()
+	{
+		Vector2 real = Screen.VirtualToRealCoords(pos,(0,0),(320,200),false,false);
+		if ( (real.x < 0) || (real.x > Screen.GetWidth()) || (real.y < 0) || (real.y > Screen.GetHeight()) )
+			return false;
+		return true;
+	}
+}
+
+// using this static event handler for various playsim stuff is an outright
+// crime and I really would not recommend anyone to do this
+// it is VERY easy to break things this way, especially in multiplayer
+// graf has every right to despise static event handlers
+Class StaticMapHandler : StaticEventHandler
+{
+	ui bool noclipwarn;
+	bool dosteppy;
+	ui Array<Steppy> steppies;
+	ui int steppytics;
+	ui Shape2D foots;
+	ui TextureID steppytex;
+	ui int logotics, stattics;
+	ui TextureID logotex;
+	transient ui font promptfn;
+	bool printstats;
+	ui MapHandler mh;
+
+	override void WorldLoaded( WorldEvent e )
+	{
+		if ( gamestate == GS_TITLELEVEL ) return;
+		printstats = false;
+		// token handling
+		bool saved = false;
+		for ( int i=0; i<MAXPLAYERS; i++ )
+		{
+			if ( !playeringame[i] ) continue;
+			players[i].mo.GiveInventory("LoadedGameToken",1);
+			if ( players[i].mo.CountInv("SavedGameToken") ) saved = true;
+		}
+		if ( e.IsSaveGame && !saved && sm_session ) return;	// menu/quick saves don't have a fade
+		// mute all music right as the world is loaded
+		// this has to be done from the zscript side so the muting is
+		// done right on the 0th tic, otherwise this would only take
+		// effect after the screen wipe finishes
+		mkAmbMix.Mute();
+		// more stuff to do on the 0th tic because the ACS thinker
+		// has some delay
+		Actor a = ActorIterator.Create(9999).Next();
+		if ( a ) a.A_StopSound(CHAN_5);
+		// fade in
+		level.ExecuteSpecial(80,null,null,false,-Int('JustLoaded'));
+	}
+
+	override void PostUiTick()
+	{
+		// noclip warning
+		if ( (players[consoleplayer].cheats&CF_NOCLIP || players[consoleplayer].cheats&CF_NOCLIP2) && !noclipwarn )
+		{
+			noclipwarn = true;
+			Console.Printf("\cgWARNING:\ca The use of noclip CAN and WILL cause many issues due to how the map works.\c-");
+		}
+		if ( dosteppy )
+		{
+			for ( int i=0; i<steppies.Size(); i++ )
+				steppies[i].alpha = max(0.0,steppies[i].alpha-0.01);
+			steppytics--;
+			if ( steppytics <= 0 )
+			{
+				// add steppy
+				let s = new("Steppy");
+				if ( (steppies.Size() > 0) && steppies[steppies.Size()-1].OnScreen() )
+				{
+					// steppies already exist, re-use angle and move from offset
+					s.angle = steppies[steppies.Size()-1].angle+FRandom[Steppy](-5,5);
+					s.flip = !steppies[steppies.Size()-1].flip;
+					Vector2 ofs = (s.flip?16:-16,-36);
+					s.pos = steppies[steppies.Size()-1].pos+(ofs.x*cos(s.angle)-ofs.y*sin(s.angle),ofs.x*sin(s.angle)+ofs.y*cos(s.angle));
+					s.alpha = 1.25;
+					steppies.Push(s);
+				}
+				else
+				{
+					// randomize initial steppy position and angle
+					s.flip = Random[Steppy](0,1);
+					s.pos = (FRandom[Steppy](20,300),FRandom[Steppy](20,180));
+					Vector2 vdiff = (160,100)-s.pos;
+					vdiff = vdiff.unit();
+					s.angle = atan2(vdiff.y,vdiff.x)+FRandom[Steppy](-15,15)+90;
+					steppies.Push(s);
+				}
+				steppytics = 35;
+			}
+		}
+		else steppytics = 0;
+		if ( printstats ) stattics++;
+		else stattics = 0;
+		if ( gamestate == GS_TITLELEVEL ) logotics++;
+		else logotics = 0;
+	}
+
+	static void Steppy( bool on )
+	{
+		let hnd = StaticMapHandler(StaticEventHandler.Find("StaticMapHandler"));
+		hnd.dosteppy = on;
+	}
+
+	override void WorldTick()
+	{
+		if ( gamestate != GS_TITLELEVEL ) return;
+		// wavy camera for TITLEMAP
+		players[consoleplayer].mo.A_SetAngle(sin(gametic*0.233)*20.0,SPF_INTERPOLATE);
+		players[consoleplayer].mo.A_SetPitch(sin(gametic*0.124)*10.0,SPF_INTERPOLATE);
+	}
+
+	static void PrintoutStats()
+	{
+		let hnd = StaticMapHandler(StaticEventHandler.Find("StaticMapHandler"));
+		hnd.printstats = true;
+	}
+
+	static clearscope String GetScoreForStats( int btime, int mitems, int mrooms, int scount )
+	{
+		if ( (btime <= 20) && (mitems <= 8) && (mrooms <= 3) && (scount <= 6) )
+			return "\cfS\c-";
+		else if ( (btime <= 30) && (mitems <= 12) && (mrooms <= 6) && (scount <= 10) )
+			return "\coA\c-";
+		else if ( (btime <= 50) && (mitems <= 16) && (mrooms <= 9) && (scount <= 15) )
+			return "\cpB\c-";
+		else if ( (btime <= 100) && (mitems <= 20) && (mrooms <= 12) && (scount <= 20) )
+			return "\cdC\c-";
+		return "\cnD\c-";
+	}
+
+	override void RenderOverlay( RenderEvent e )
+	{
+		if ( printstats )
+		{
+			if ( !promptfn ) promptfn = Font.GetFont('statblws');
+			if ( !mh ) mh = MapHandler(EventHandler.Find("MapHandler"));
+			int h, m, s;
+			int xpos, ypos;
+			String time_str = StringTable.Localize("$STATS_TIME"),
+				itm_str = StringTable.Localize("$STATS_ITEMS"),
+				room_str = StringTable.Localize("$STATS_ROOMS"),
+				save_str = StringTable.Localize("$STATS_SAVES"),
+				score_str = StringTable.Localize("$STATS_SCORE");
+			String itm_val = String.Format("%d / %d",level.found_items,level.total_items),
+				room_val = String.Format("%d / %d",level.found_secrets,level.total_secrets),
+				save_val = String.Format("%d",mh.savecount),
+				score_val = GetScoreForStats(Thinker.Tics2Seconds(mh.beattime)/60,level.total_items-level.found_items,level.total_secrets-level.found_secrets,mh.savecount);
+			int mxl = max(max(promptfn.StringWidth(time_str),promptfn.StringWidth(itm_str)),promptfn.StringWidth(room_str));
+			ypos = 340;
+			if ( stattics >= 0 )
+			{
+				s = Thinker.Tics2Seconds(mh.beattime);
+				h = s/3600;
+				m = (s%3600)/60;
+				s = s%60;
+				String tfmt;
+				if ( h > 0 )
+				{
+					if ( m > 0 )
+					{
+						if ( s > 0 ) tfmt = String.Format("%dh %dm %ds",h,m,s);
+						else tfmt = String.Format("%dh %dm",h,m);
+					}
+					else if ( s > 0 ) tfmt = String.Format("%dh %ds",h,s);
+					else tfmt = String.Format("%dh",h);
+				}
+				else if ( m > 0 )
+				{
+					if ( s > 0 ) tfmt = String.Format("%dm %ds",m,s);
+					else tfmt = String.Format("%dm",m);
+				}
+				else tfmt = String.Format("%ds",s);
+				xpos = 8;
+				Screen.DrawText(promptfn,Font.CR_WHITE,xpos,ypos,time_str,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp((stattics+e.fractic)/30,0.0,1.0));
+				xpos += mxl+8;
+				Screen.DrawText(promptfn,Font.CR_BLACK,xpos,ypos,tfmt,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp((stattics+e.fractic)/30,0.0,1.0));
+				ypos += 16;
+			}
+			if ( stattics >= 20 )
+			{
+				xpos = 8;
+				Screen.DrawText(promptfn,Font.CR_WHITE,xpos,ypos,itm_str,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp(((stattics-20)+e.fractic)/30,0.0,1.0));
+				xpos += mxl+8;
+				Screen.DrawText(promptfn,Font.CR_BLACK,xpos,ypos,itm_val,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp(((stattics-20)+e.fractic)/30,0.0,1.0));
+				ypos += 16;
+			}
+			if ( stattics >= 40 )
+			{
+				xpos = 8;
+				Screen.DrawText(promptfn,Font.CR_WHITE,xpos,ypos,room_str,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp(((stattics-40)+e.fractic)/30,0.0,1.0));
+				xpos += mxl+8;
+				Screen.DrawText(promptfn,Font.CR_BLACK,xpos,ypos,room_val,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp(((stattics-40)+e.fractic)/30,0.0,1.0));
+				ypos += 16;
+			}
+			mxl = max(promptfn.StringWidth(save_str),promptfn.StringWidth(score_str));
+			int mxl2 = max(promptfn.StringWidth(save_val),promptfn.StringWidth(score_val));
+			ypos = 340;
+			if ( stattics >= 60 )
+			{
+				xpos = 632-(mxl+8+mxl2);
+				Screen.DrawText(promptfn,Font.CR_WHITE,xpos,ypos,save_str,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp(((stattics-60)+e.fractic)/30,0.0,1.0));
+				xpos += mxl+8;
+				Screen.DrawText(promptfn,Font.CR_BLACK,xpos,ypos,save_val,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp(((stattics-60)+e.fractic)/30,0.0,1.0));
+				ypos += 32;
+			}
+			if ( stattics >= 80 )
+			{
+				xpos = 632-(mxl+8+mxl2);
+				Screen.DrawText(promptfn,Font.CR_WHITE,xpos,ypos,score_str,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp(((stattics-80)+e.fractic)/30,0.0,1.0));
+				xpos += mxl+8;
+				Screen.DrawText(promptfn,Font.CR_BLACK,xpos,ypos,score_val,DTA_VirtualWidth,640,DTA_VirtualHeight,400,DTA_Alpha,clamp(((stattics-120)+e.fractic)/40,0.0,1.0));
+			}
+		}
+		if ( gamestate == GS_TITLELEVEL )
+		{
+			if ( logotics >= 120 )
+			{
+				if ( logotex.IsNull() ) logotex = TexMan.CheckForTexture("sm_logo",TexMan.Type_Any);
+				Vector2 sz = TexMan.GetScaledSize(logotex);
+				Screen.DrawTexture(logotex,false,240-sz.x/2,240-sz.y/2,DTA_VirtualWidth,480,DTA_VirtualHeight,300,DTA_Alpha,clamp(((logotics+e.FracTic)-120)/70,0.0,1.0));
+			}
+			if ( (logotics >= 270) && !menuactive )
+			{
+				if ( !promptfn ) promptfn = Font.GetFont('statblws');
+				if ( (logotics-270)%80 < 40 )
+					Screen.DrawText(promptfn,Font.CR_GOLD,320-promptfn.StringWidth("Press any key")/2,380-promptfn.GetHeight()/2,"Press any key",DTA_VirtualWidth,640,DTA_VirtualHeight,400);
+			}
+		}
+		if ( dosteppy )
+		{
+			if ( !foots )
+			{
+				foots = new("Shape2D");
+				foots.PushCoord((0,0));
+				foots.PushCoord((1,0));
+				foots.PushCoord((0,1));
+				foots.PushCoord((1,1));
+				foots.PushTriangle(0,3,1);
+				foots.PushTriangle(0,2,3);
+			}
+			if ( steppytex.IsNull() ) steppytex = TexMan.CheckForTexture("steppy",TexMan.Type_Any);
+			for ( int i=0; i<steppies.Size(); i++ )
+			{
+				// draw the step with a virtual res of 320x200
+				// has to be done before calling DrawShape because the DTA_ args for this aren't yet
+				// supported by the function
+				Vector2 pos, siz;
+				[pos, siz] = Screen.VirtualToRealCoords(steppies[i].pos,(16,16),(320,200),false,false);
+				Vector2 verts[4];
+				verts[0] = (-siz.x,-siz.y);
+				verts[1] = (siz.x,-siz.y);
+				verts[2] = (-siz.x,siz.y);
+				verts[3] = (siz.x,siz.y);
+				foots.Clear(Shape2D.C_Verts);
+				double rrot = steppies[i].angle;
+				for ( int j=0; j<4; j++ )
+				{
+					if ( steppies[i].flip ) verts[j].x *= -1;
+					foots.PushVertex(pos+(verts[j].x*cos(rrot)-verts[j].y*sin(rrot),verts[j].x*sin(rrot)+verts[j].y*cos(rrot)));
+				}
+				Screen.DrawShape(steppytex,false,foots,DTA_LegacyRenderStyle,STYLE_Add,DTA_Alpha,min(1.,steppies[i].alpha));
+			}
+		}
+		else if ( steppies.Size() ) steppies.Clear();
+	}
+}
+
+Class MapHandler : EventHandler
+{
+	Line lastactivated;
+	Array<int> roomcache;
+	int savecount, beattime, ingametime;
+	transient ui CVar showigt;
+	transient ui Font igtfont;
+
+	static void RegisterBeatTime()
+	{
+		let hnd = MapHandler(EventHandler.Find("MapHandler"));
+		hnd.beattime = hnd.ingametime;
+	}
+
+	static bool IsCached( int tid )
+	{
+		let hnd = MapHandler(EventHandler.Find("MapHandler"));
+		if ( hnd.roomcache.Size() <= 0 ) return false;
+		let a = ActorIterator.Create(tid).Next();
+		if ( a.args[1] )
+		{
+			a.args[1] = 0;
+			return false;
+		}
+		for ( int i=0; i<hnd.roomcache.Size(); i++ )
+		{
+			if ( a.args[0] == hnd.roomcache[i] )
+			{
+				// push back to the top
+				for ( int j=i-1; j>=0; j-- ) hnd.roomcache[j+1] = hnd.roomcache[j];
+				hnd.roomcache[0] = a.args[0];
+				return true;
+			}
+		}
+		// push in new room
+		for ( int i=hnd.roomcache.Size()-2; i>=0; i-- )
+			hnd.roomcache[i+1] = hnd.roomcache[i];
+		hnd.roomcache[0] = a.args[0];
+		return false;
+	}
+
+	override void WorldLoaded( WorldEvent e )
+	{
+		if ( gamestate == GS_TITLELEVEL ) return;
+		if ( !e.IsSaveGame && !e.IsReOpen )
+		{
+			// pre-mark all doorscript lines as "door" in the map
+			for ( int i=0; i<level.Lines.size(); i++ )
+			{
+				Line l = level.Lines[i];
+				if ( l.args[0] == -int('DoorScript') )
+				{
+					l.locknumber = 242;
+					// randomize jam messages
+					if ( (l.args[2] >= 800) && (l.args[2] <= 804) )
+						l.args[3] = Random[Jammed](1,7);
+				}
+			}
+			// place all the room counters (excluding the first, since it's where we start)
+			for ( int i=1; i<54; i++ )
+			{
+				let c = Actor.Spawn("mkRoomCounter");
+				c.ChangeTID(1100+i);
+			}
+			level.found_secrets = 1;
+			level.total_secrets = 54;
+			// start up room cache
+			roomcache.Clear();
+			roomcache.Resize(sm_roomcachesize);
+			if ( roomcache.Size() > 0 )
+			{
+				roomcache[0] = 0;
+				for ( int i=1; i<roomcache.Size(); i++ ) roomcache[i] = -1;
+			}
+			ingametime = -1;	// account for small hiccup
+		}
+	}
+
+	static void SaveSquared()
+	{
+		let hnd = MapHandler(EventHandler.Find("MapHandler"));
+		hnd.savecount++;
+	}
+
+	static int GetSaveSquared()
+	{
+		let hnd = MapHandler(EventHandler.Find("MapHandler"));
+		return hnd.savecount;
+	}
+
+	override void WorldLinePreActivated( WorldEvent e )
+	{
+		if ( e.ActivatedLine.args[0] == -int('DoorScript') ) lastactivated = e.ActivatedLine;
+	}
+
+	override void RenderOverlay( RenderEvent e )
+	{
+		if ( !showigt ) showigt = CVar.GetCVar('sm_timer',players[consoleplayer]);
+		if ( !showigt.GetBool() || (gamestate != GS_LEVEL) || (beattime > 0) ) return;
+		if ( !igtfont ) igtfont = Font.GetFont('IGTFONT');
+		int xpos = Screen.GetWidth()-(igtfont.StringWidth("00:00:00.000")+1)*CleanXFac;
+		int ypos = Screen.GetHeight()-igtfont.GetHeight()*CleanYFac;
+		double rtime = double(ingametime)/Thinker.TICRATE;
+		int h,m,s,ms;
+		ms = int((rtime*1000)%1000);
+		h = int(floor(rtime/3600));
+		m = int(floor(rtime/60)%60);
+		s = int(floor(rtime)%60);
+		String tfmt = String.Format("%02d:%02d:%02d.%03d",h,m,s,ms);
+		Screen.DrawText(igtfont,Font.CR_UNTRANSLATED,xpos+CleanXFac,ypos+CleanYFac,tfmt,DTA_CleanNoMove,true,DTA_FillColor,Color(32,32,32));
+		Screen.DrawText(igtfont,Font.CR_GOLD,xpos,ypos,tfmt,DTA_CleanNoMove,true);
+	}
+
+	override void WorldTick()
+	{
+		if ( roomcache.Size() != sm_roomcachesize )
+		{
+			int oldsz = roomcache.Size();
+			roomcache.Resize(sm_roomcachesize);
+			if ( sm_roomcachesize > oldsz )
+			{
+				for ( int i=oldsz; i<sm_roomcachesize; i++ )
+					roomcache[i] = -1;
+			}
+		}
+		for ( int i=0; i<MAXPLAYERS; i++ )
+		{
+			if ( !playeringame[i] ) continue;
+			if ( players[i].cheats&CF_TOTALLYFROZEN ) return;
+		}
+		ingametime++;
+	}
+}

@@ -24,6 +24,7 @@ SCRIPT "AssignPlayer" ENTER
 
 SCRIPT "RespawnPlayer" RESPAWN
 {
+	Thing_ChangeTID(0,PlayerNumber()+4000);
 	if ( lastspot == -1 ) terminate;
 	ScriptCall("mkACSUtil","ForceMoveOnePlayer",lastspot);
 }
@@ -48,7 +49,7 @@ SCRIPT "SaveSquare" ( void )
 	default:
 		Print(s:"");
 		ScriptCall("mkAmbMix","Mute",1.0);
-		PlaySound(0,"map/save",CHAN_5);
+		PlaySound(9999,"map/save",CHAN_5|CHAN_UI,1.0,false,ATTN_NONE);
 		// make the fades global
 		int oldtid = ActivatorTID();
 		SetActivator(0,AAPTR_NULL);
@@ -57,10 +58,11 @@ SCRIPT "SaveSquare" ( void )
 		HudMessage(s:"A";HUDMSG_FADEINOUT,1,CR_UNTRANSLATED,160.0,120.0,2.0,1.0,1.0);
 		SetActivator(oldtid);
 		Delay(35);
+		GiveInventory("SavedGameToken",1);
+		ScriptCall("MapHandler","SaveSquared");
 		Autosave();
 		if ( CheckInventory("LoadedGameToken") )
 		{
-			StopSound(0,CHAN_5);
 			Delay(70);
 			break;
 		}
@@ -74,20 +76,32 @@ SCRIPT "SaveSquare" ( void )
 // sequence for fade in from black
 SCRIPT "JustLoaded" ( void )
 {
-	SetActivator(0,AAPTR_NULL);
 	SetPlayerProperty(true,on,PROP_TOTALLYFROZEN);
 	// the following guarantee that the save square effect is completely cancelled out
+	SetActivator(0,AAPTR_NULL);
 	SetHUDSize(320,240,true);
 	SetFont("BlkFade");
 	HudMessage(s:"A";HUDMSG_PLAIN,1,CR_UNTRANSLATED,160.0,120.0,0.0);
-	Delay(3);
-	AmbientSound("map/load",127);
-	if ( GetCVar("sm_fakeload") ) Delay(Random(80,140));
-	else Delay(35);
+	if ( GetCVar("sm_fakeload") && !GetCVar("sm_session") )
+	{
+		Delay(3);
+		AmbientSound("map/load",127);
+		SetCVar("sm_session",true);
+		Delay(70);
+		ScriptCall("StaticMapHandler","Steppy",true);
+		Delay(Random(90,210));
+		ScriptCall("StaticMapHandler","Steppy",false);
+	}
+	else
+	{
+		Delay(3);
+		AmbientSound("map/load",127);
+		SetCVar("sm_session",true);
+		Delay(70);
+	}
 	HudMessage(s:"A";HUDMSG_FADEOUT,1,CR_UNTRANSLATED,160.0,120.0,0.0,1.0);
-	TakeInventory("LoadedGameToken",1);
 	SetPlayerProperty(true,off,PROP_TOTALLYFROZEN);
-	ScriptCall("mkAmbMix","Unmute",0.5);
+	ScriptCall("mkAmbMix","Unmute",0.25);
 }
 
 // code for notes
@@ -95,31 +109,33 @@ int lastnote = -1;
 
 SCRIPT "LeaveNote" ( int index )
 {
-	if ( (index < 1) || (index > 11) )
+	if ( (index < 1) || (index > 12) )
 	{
 		Log(s:"Unhandled note index ",d:index,s:". Please contact the developer.");
 		terminate;
 	}
 	if ( lastnote != index ) terminate;
 	SetHudSize(320,200,FALSE);
+	SetFont("STAT_LWR");
 	str msgid = StrParam(s:"NOTE_",d:index);
 	lastnote = -1;
-	HudMessage(l:msgid;HUDMSG_FADEOUT,900,CR_UNTRANSLATED,160.0,100.0,0.0,1.0);
+	HudMessage(l:msgid;HUDMSG_FADEOUT,900,CR_UNTRANSLATED,160.0,100.0,0.0,0.5);
 }
 
 SCRIPT "Note" ( int index )
 {
-	if ( (index < 1) || (index > 11) )
+	if ( (index < 1) || (index > 12) )
 	{
 		Log(s:"Unhandled note index ",d:index,s:". Please contact the developer.");
 		terminate;
 	}
 	SetHudSize(320,200,FALSE);
+	SetFont("STAT_LWR");
 	str msgid = StrParam(s:"NOTE_",d:index);
 	if ( lastnote == index )
 	{
 		lastnote = -1;
-		HudMessage(l:msgid;HUDMSG_FADEOUT,900,CR_UNTRANSLATED,160.0,100.0,0.0,1.0);
+		HudMessage(l:msgid;HUDMSG_FADEOUT,900,CR_UNTRANSLATED,160.0,100.0,0.0,0.5);
 		Delay(35);
 	}
 	else
@@ -137,7 +153,7 @@ SCRIPT "SetupKeys" OPEN
 {
 	if ( initialized ) terminate;
 	initialized = 1;
-	for ( int i=0; i<8; i++ ) keyused[i] = 0;
+	for ( int i=0; i<9; i++ ) keyused[i] = 0;
 }
 
 // let the spaghetti code begin
@@ -168,9 +184,9 @@ function void DoorSound( int type, int mode )
 }
 
 // print a generic door jammed message
-function void JammedMsg( void )
+function void JammedMsg( int n )
 {
-	str msgn = StrParam(s:"JAM_",d:Random(1,7));
+	str msgn = StrParam(s:"JAM_",d:n);
 	Print(l:msgn);
 	ScriptCall("mkACSUtil","MarkJammed");
 }
@@ -180,7 +196,7 @@ function void JammedMsg( void )
 function bool IsUnlocked( int type, int key )
 {
 	str snd;
-	if ( (key < 1) || (key > 8) )
+	if ( (key < 1) || (key > 9) )
 	{
 		snd = StrParam(s:"door/locked",d:type);
 		Print(l:"LOCKMSG");
@@ -213,7 +229,7 @@ function bool IsUnlocked( int type, int key )
 // Contains all the door IDs used in the entire game
 // Handles door locks and deactivation of critters from the incoming room so
 // the player isn't interrupted mid-transition
-function bool DoorOpen( int index )
+function bool DoorOpen( int index, int jamnum )
 {
 	bool exitstatus = false;
 	switch ( index )
@@ -796,30 +812,63 @@ function bool DoorOpen( int index )
 		Thing_Deactivate(1150);
 		exitstatus = true;
 		break;
+	// ow 1st hall -> room 087
+	case 193:
+		DoorSound(1,MODE_OPEN);
+		Thing_Deactivate(1122);
+		exitstatus = true;
+		break;
+	// room 087 -> ow 1st hall
+	case 194:
+		DoorSound(2,MODE_OPEN);
+		Thing_Deactivate(1151);
+		exitstatus = true;
+		break;
+	// ow 2nd hall -> room 47388
+	case 195:
+		if ( IsUnlocked(3,9) )
+		{
+			DoorSound(3,MODE_OPEN);
+			Thing_Deactivate(1128);
+			exitstatus = true;
+		}
+		break;
+	// room 47388 -> ow 2nd hall
+	case 196:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1153);
+		exitstatus = true;
+		break;
+	// ow 2nd hall -> room 624
+	case 197:
+		DoorSound(3,MODE_OPEN);
+		Thing_Deactivate(1128);
+		exitstatus = true;
+		break;
 	// jammed wood 1
 	case 800:
 		DoorSound(1,MODE_JAMMED);
-		JammedMsg();
+		JammedMsg(jamnum);
 		break;
 	// jammed metal 1
 	case 801:
 		DoorSound(2,MODE_JAMMED);
-		JammedMsg();
+		JammedMsg(jamnum);
 		break;
 	// jammed wood 2
 	case 802:
 		DoorSound(3,MODE_JAMMED);
-		JammedMsg();
+		JammedMsg(jamnum);
 		break;
 	// jammed metal 2
 	case 803:
 		DoorSound(4,MODE_JAMMED);
-		JammedMsg();
+		JammedMsg(jamnum);
 		break;
 	// jammed wood 3
 	case 804:
 		DoorSound(5,MODE_JAMMED);
-		JammedMsg();
+		JammedMsg(jamnum);
 		break;
 	default:
 		Log(s:"Unhandled door index ",d:index,s:". Please contact the developer.");
@@ -1437,6 +1486,45 @@ function void DoorClose( int index )
 		ScriptCall("mkAmbMix","MixStop","amb_0043");
 		ScriptCall("mkAmbMix","MixStart","amb_0044");
 		break;
+	// ow 1st hall -> room 087
+	case 193:
+		DoorSound(2,MODE_CLOSE);
+		Thing_Activate(1151);
+		ScriptCall("mkAmbMix","MixStop","amb_0023");
+		ScriptCall("mkAmbMix","MixStart","amb_0087");
+		ScriptCall("ShaderHandler","OtherworldFilter",false);
+		break;
+	// room 087 -> ow 1st hall
+	case 194:
+		DoorSound(1,MODE_CLOSE);
+		Thing_Activate(1122);
+		ScriptCall("mkAmbMix","MixStop","amb_0087");
+		ScriptCall("mkAmbMix","MixStart","amb_0023");
+		ScriptCall("ShaderHandler","OtherworldFilter",true);
+		break;
+	// ow 2nd hall -> room 47388
+	case 195:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1153);
+		ScriptCall("mkAmbMix","MixStop","amb_0019");
+		ScriptCall("mkAmbMix","MixStart","amb47388");
+		ScriptCall("ShaderHandler","OtherworldFilter",false);
+		break;
+	// room 47388 -> ow 2nd hall
+	case 196:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1128);
+		ScriptCall("mkAmbMix","MixStop","amb47388");
+		ScriptCall("mkAmbMix","MixStart","amb_0019");
+		ScriptCall("ShaderHandler","OtherworldFilter",true);
+		break;
+	// ow 2nd hall -> room 624
+	case 197:
+		DoorSound(3,MODE_CLOSE);
+		Thing_Activate(1124);
+		ScriptCall("mkAmbMix","MixStop","amb_0019");
+		ScriptCall("mkAmbMix","MixStart","amb_0024");
+		break;
 	default:
 		Log(s:"Unhandled door index ",d:index,s:". Please contact the developer.");
 		break;
@@ -1451,18 +1539,19 @@ function void DoorClose( int index )
 // switch block. This is a very very very bad way of doing it and I hope that,
 // once this is over and I have time to polish this whole project, I can
 // replace most of this with a small zscript interface
-SCRIPT "DoorScript" ( int index )
+SCRIPT "DoorScript" ( int index, int jamnum )
 {
 	if ( blockdoors )
 	{
 		SetResultValue(0);
 		terminate;
 	}
-	if ( !DoorOpen(index) )
+	if ( !DoorOpen(index,jamnum) )
 	{
 		Delay(10);
 		terminate;
 	}
+	ScriptCall("mkACSUtil","MarkVisited");
 	if ( ThingCount(T_NONE,index+2000) < 1 )
 	{
 		Log(s:"No destination spot for door index ",d:index,s:". Please contact the developer.");
@@ -1473,6 +1562,7 @@ SCRIPT "DoorScript" ( int index )
 	// push obstacles away
 	ScriptCall("mkACSUtil","ClearSpot",index+2000);
 	SetPlayerProperty(true,on,PROP_TOTALLYFROZEN);
+	Thing_Stop(0);
 	// make the fades global
 	int oldtid = ActivatorTID();
 	SetActivator(0,AAPTR_NULL);
@@ -1483,7 +1573,17 @@ SCRIPT "DoorScript" ( int index )
 	Delay(35);
 	HudMessage(s:"A";HUDMSG_PLAIN,2,CR_UNTRANSLATED,160.0,120.0,0.0);
 	// Emulate load times
-	if ( GetCVar("sm_fakeload") ) Delay(Random(80,120));
+	if ( GetCVar("sm_fakeload") )
+	{
+		if ( !ScriptCall("MapHandler","IsCached",index+2000) )
+		{
+			ScriptCall("StaticMapHandler","Steppy",true);
+			Delay(Random(60,240));
+			if ( (index == 141) || (index == 191) ) Delay(Random(60,240));
+			ScriptCall("StaticMapHandler","Steppy",false);
+		}
+		else Delay(Random(40,80));
+	}
 	else Delay(35);
 	SetActivator(oldtid);
 	DoorClose(index);

@@ -15,3 +15,9 @@ LOCK 242
 	DummyKey
 	MapColor 64 64 128
 }
+
+LOCK 243
+{
+	DummyKey
+	MapColor 64 128 64
+}

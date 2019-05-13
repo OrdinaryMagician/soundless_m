@@ -3,23 +3,30 @@ Class ShaderHandler : EventHandler
 {
 	bool owenable;
 	double fadeval, fadespeed;
-	transient CVar dolow, dovig, dodither, dopos, dograin, doblur, dotint;
+	transient ui CVar dolow, dovig, dopos, dograin, doblur, dotint;
 
 	override void RenderOverlay( RenderEvent e )
 	{
 		PlayerInfo p = players[consoleplayer];
+		if ( !dolow ) dolow = CVar.GetCVar('sm_lowres',p);
+		if ( !dovig ) dovig = CVar.GetCVar('sm_vignette',p);
+		if ( !dopos ) dopos = CVar.GetCVar('sm_posterize',p);
+		if ( !dograin ) dograin = CVar.GetCVar('sm_grain',p);
+		if ( !doblur ) doblur = CVar.GetCVar('sm_owblur',p);
+		if ( !dotint ) dotint = CVar.GetCVar('sm_owtint',p);
 		Shader.SetEnabled(p,"vignette",dovig.GetBool());
 		Shader.SetEnabled(p,"otherworld",owenable);
 		Shader.SetUniform1f(p,"otherworld","blend",fadeval);
 		Shader.SetUniform1i(p,"otherworld","doblur",doblur.GetBool());
 		Shader.SetUniform1i(p,"otherworld","dotint",dotint.GetBool());
 		Shader.SetUniform1i(p,"otherworld","dolow",dolow.GetBool());
+		Shader.SetUniform2f(p,"otherworld","lowres",(CleanWidth,CleanHeight));
 		Shader.SetEnabled(p,"grain",dograin.GetBool());
 		Shader.SetUniform1f(p,"grain","Timer",(gametic+e.fractic)/35.0);
 		Shader.SetEnabled(p,"retro",true);
 		Shader.SetUniform1i(p,"retro","dolow",dolow.GetBool());
 		Shader.SetUniform1i(p,"retro","dopos",dopos.GetBool());
-		Shader.SetUniform1i(p,"retro","dodither",dodither.GetBool());
+		Shader.SetUniform2f(p,"retro","lowres",(CleanWidth,CleanHeight));
 	}
 
 	override void WorldLoaded( WorldEvent e )
@@ -31,13 +38,6 @@ Class ShaderHandler : EventHandler
 
 	override void WorldTick()
 	{
-		if ( !dolow ) dolow = CVar.GetCVar('sm_lowres');
-		if ( !dovig ) dovig = CVar.GetCVar('sm_vignette');
-		if ( !dodither ) dodither = CVar.GetCVar('sm_dither');
-		if ( !dopos ) dopos = CVar.GetCVar('sm_posterize');
-		if ( !dograin ) dograin = CVar.GetCVar('sm_grain');
-		if ( !doblur ) doblur = CVar.GetCVar('sm_owblur');
-		if ( !dotint ) dotint = CVar.GetCVar('sm_owtint');
 		fadeval = clamp(fadeval+fadespeed,0.0,1.0);
 		if ( (fadeval >= 1.0) || (fadeval <= 0.0) ) fadespeed = 0.0;
 		if ( fadeval == 0.0 ) owenable = false;

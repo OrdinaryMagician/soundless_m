@@ -1,0 +1,644 @@
+// Silent Hill 2 red save squares
+Class mkSaveSquare : Actor
+{
+	override bool Used( Actor user )
+	{
+		// non-players can't use this
+		if ( !user.player ) return false;
+		// make sure there's a line of sight so we don't get activated through walls
+		if ( !user.CheckSight(self) ) return false;
+		if ( !user.ACS_NamedExecute('SaveSquare') ) return false;
+		if ( special )
+		{
+			user.A_CallSpecial(special,args[0],args[1],args[2],args[3],args[4]);
+			special = 0;
+		}
+		return true;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		if ( G_SkillPropertyInt(SKILLP_ACSReturn) >= 5 )
+		{
+			Destroy();
+			return;
+		}
+		// offset ourselves a bit
+		Vector3 dir;
+		if ( bFLATSPRITE )
+		{
+			// orient to slope if flat
+			A_SetToSlope(angle);
+			dir = CurSector.floorplane.Normal;
+		}
+		else dir = (cos(pitch)*cos(angle),cos(pitch)*sin(angle),-sin(pitch));
+		SetOrigin(pos+dir*0.1,false);
+	}
+	void A_SetToSlope( double dang )
+	{
+		vector3 fnormal = CurSector.floorplane.Normal;
+		vector2 fnormalp1 = ((fnormal.x != 0) || (fnormal.y != 0))?(fnormal.x,fnormal.y).Unit():(0,0);
+		vector2 fnormalp2 = ((fnormal.x,fnormal.y).Length(),fnormal.z);
+		double fang = atan2(fnormalp1.y,fnormalp1.x); // floor angle (not pitch!)
+		double fpitch = atan2(fnormalp2.x,fnormalp2.y); // floor pitch
+		double ddiff1 = cos(fang-(dang-90));
+		double ddiff2 = cos(fang-dang);
+		pitch = -fpitch*ddiff2;
+		roll = fpitch*ddiff1;
+		angle = dang;
+	}
+
+	Default
+	{
+		//$Title Save Square
+		//$Category Map
+		RenderStyle "Translucent";
+		Alpha 0.999999;
+		Scale 0.35;
+		Radius 12;
+		Height 12;
+		+WALLSPRITE;
+		+ROLLSPRITE;
+		+ROLLCENTER;
+		+NOGRAVITY;
+	}
+	States
+	{
+	Spawn:
+		SAVE A -1 Light("SaveLight");
+		Stop;
+	}
+}
+
+// a save square that lies on a flat surface, rather than a wall
+Class mkFlatSaveSquare : mkSaveSquare
+{
+	Default
+	{
+		//$Title Save Square (Flat)
+		//$Category Map
+		Height 4;
+		-WALLSPRITE;
+		+FLATSPRITE;
+	}
+	States
+	{
+	Spawn:
+		SAVE B -1 Light("FlatSaveLight");
+		Stop;
+	}
+}
+
+// Readable notes
+// Notes use the "Score" property for their id
+// and the ambush flag for red color
+// I hope this isn't too much of a hack
+Class mkNote : Actor
+{
+	bool bActive, bUsed;
+	Actor lastuser;
+
+	override bool Used( Actor user )
+	{
+		// non-players can't use this
+		if ( !user || !user.player ) return false;
+		// make sure there's a line of sight so we don't get activated through walls
+		if ( !user.CheckSight(self) ) return false;
+		if ( !user.ACS_NamedExecute('Note',0,score) ) return false;
+		if ( special )
+		{
+			user.A_CallSpecial(special,args[0],args[1],args[2],args[3],args[4]);
+			special = 0;
+		}
+		bActive = true;
+		lastuser = user;
+		if ( !bUsed )
+		{
+			bUsed = true;
+			user.player.itemcount++;
+			level.found_items++;
+		}
+		return true;
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		if ( !bActive ) return;
+		Vector3 sc = level.SphericalCoords(lastuser.Vec2OffsetZ(0,0,lastuser.player.viewz),Vec3Offset(0,0,height/2),(lastuser.angle,lastuser.pitch));
+		if ( (Distance2D(lastuser) > 40) || (abs(sc.x)>30) || (abs(sc.y)>30) )
+		{
+			lastuser.ACS_NamedTerminate('Note');
+			lastuser.ACS_NamedExecute('LeaveNote',0,score);
+			bActive = false;
+		}
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		bActive = false;
+		bUsed = false;
+		level.total_items++;
+		// offset ourselves a bit
+		Vector3 dir;
+		if ( bFLATSPRITE )
+		{
+			// orient to slope if flat
+			A_SetToSlope(angle);
+			dir = CurSector.floorplane.Normal;
+		}
+		else dir = (cos(pitch)*cos(angle),cos(pitch)*sin(angle),-sin(pitch));
+		SetOrigin(pos+dir*0.1,false);
+	}
+	void A_SetToSlope( double dang )
+	{
+		vector3 fnormal = CurSector.floorplane.Normal;
+		vector2 fnormalp1 = ((fnormal.x != 0) || (fnormal.y != 0))?(fnormal.x,fnormal.y).Unit():(0,0);
+		vector2 fnormalp2 = ((fnormal.x,fnormal.y).Length(),fnormal.z);
+		double fang = atan2(fnormalp1.y,fnormalp1.x); // floor angle (not pitch!)
+		double fpitch = atan2(fnormalp2.x,fnormalp2.y); // floor pitch
+		double ddiff1 = cos(fang-(dang-90));
+		double ddiff2 = cos(fang-dang);
+		pitch = -fpitch*ddiff2;
+		roll = fpitch*ddiff1;
+		angle = dang;
+	}
+
+	Default
+	{
+		//$Title Note
+		//$Category Map
+		RenderStyle "Translucent";
+		Alpha 0.999999;
+		Scale 0.35;
+		Radius 8;
+		Height 12;
+		+WALLSPRITE;
+		+ROLLSPRITE;
+		+ROLLCENTER;
+		+NOGRAVITY;
+	}
+	States
+	{
+	Spawn:
+		NOTE A 0 NoDelay A_JumpIf(bAMBUSH,2);
+		NOTE A -1;
+		Stop;
+		NOTE C -1;
+		Stop;
+	}
+}
+
+// for flats
+Class mkFlatNote : mkNote
+{
+	Default
+	{
+		//$Title Note (Flat)
+		//$Category Map
+		Radius 8;
+		Height 4;
+		-WALLSPRITE;
+		+FLATSPRITE;
+	}
+	States
+	{
+	Spawn:
+		NOTE B 0 NoDelay A_JumpIf(bAMBUSH,2);
+		NOTE B -1;
+		Stop;
+		NOTE D -1;
+		Stop;
+	}
+}
+
+// footprints for player and critters when stepping on blood
+Class mkFootprint : Actor
+{
+	int deadtimer;
+
+	Default
+	{
+		+FLATSPRITE;
+		+ROLLSPRITE;
+		+MOVEWITHSECTOR;
+		+NOGRAVITY;
+		RenderStyle "Shaded";
+		Scale 0.7;
+	}
+
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		SetOrigin((pos.x,pos.y,floorz),false);
+		vector3 fnormal = CurSector.floorplane.Normal;
+		vector2 fnormalp1 = ((fnormal.x != 0) || (fnormal.y != 0))?(fnormal.x,fnormal.y).Unit():(0,0);
+		vector2 fnormalp2 = ((fnormal.x,fnormal.y).Length(),fnormal.z);
+		double fang = atan2(fnormalp1.y,fnormalp1.x); // floor angle (not pitch!)
+		double fpitch = atan2(fnormalp2.x,fnormalp2.y); // floor pitch
+		double ddiff1 = cos(fang-(angle-90));
+		double ddiff2 = cos(fang-angle);
+		pitch = -fpitch*ddiff2;
+		roll = fpitch*ddiff1;
+		deadtimer = 0;
+	}
+
+	override void Tick()
+	{
+		Super.Tick();
+		deadtimer++;
+		if ( deadtimer > 1000 ) A_FadeOut(0.01);
+	}
+
+	States
+	{
+	Spawn:
+		FOOT # -1;
+		Stop;
+	Dummy:
+		FOOT ABCD 0;
+		Stop;
+	}
+}
+
+// Fog maker
+Class mkFog : Actor
+{
+	int lifespan, lifetime;
+	double basealpha;
+
+	Default
+	{
+		Radius 2;
+		Height 2;
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+DONTSPLASH;
+		+FORCEXYBILLBOARD;
+		+THRUACTORS;
+		Scale 3.0;
+		RenderStyle "Add";
+	}
+
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		double ang, pt;
+		scale *= FRandom[Fog](0.75,1.25);
+		basealpha = FRandom[Fog](0.01,0.05);
+		ang = FRandom[Fog](0,360);
+		pt = FRandom[Fog](-90,90);
+		vel = (cos(pt)*cos(ang),cos(pt)*sin(ang),-sin(pt))*FRandom[Fog](0.2,2.0);
+		lifespan = Random[Fog](100,300);
+		lifetime = 0;
+		int jumps = Random[Puff](0,19);
+		state dest = ResolveState("Spawn");
+		for ( int i=0; i<jumps; i++ ) dest = dest.NextState;
+		SetState(dest);
+	}
+	override void Tick()
+	{
+		Super.Tick();
+		double lifephase = lifetime/double(lifespan);
+		alpha = sin(lifephase*180.0)*basealpha;
+		lifetime++;
+		if ( lifetime >= lifespan ) Destroy();
+	}
+	States
+	{
+	Spawn:
+		DUST ABCDEFGHIJKLMNOPQRST 4;
+		Loop;
+	}
+}
+
+Class mkFogMaker : Actor
+{
+	bool active;
+
+	override void Activate( Actor activator )
+	{
+		active = true;
+	}
+	override void Deactivate( Actor activator )
+	{
+		active = false;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		active = false;
+	}
+
+	action void A_DoFog()
+	{
+		if ( !invoker.active )
+		{
+			A_RemoveChildren(true);
+			return;
+		}
+		// pick random spots within volume
+		double x = args[0];
+		double y = args[1];
+		double z = args[2];
+		int num = args[3];
+		for ( int i=0; i<num; i++ )
+		{
+			Vector3 spawnpos = Vec3Offset(FRandom[Fog](-x,x),FRandom[Fog](-y,y),FRandom[Fog](-z,z));
+			if ( !level.IsPointInMap(spawnpos) ) continue;
+			let f = Spawn("mkFog",spawnpos);
+			f.master = invoker;
+		}
+	}
+	Default
+	{
+		//$Title Fog Generator
+		//$Category Map
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+DONTSPLASH;
+	}
+	States
+	{
+	Spawn:
+		TNT1 A 3 A_DoFog();
+		Wait;
+	}
+}
+
+// Rain
+Class mkRaindrop : Actor
+{
+	Default
+	{
+		Radius 2;
+		Height 2;
+		RenderStyle "Translucent";
+		+NOGRAVITY;
+		+NOBLOCKMAP;
+		+MISSILE;
+		+DONTSPLASH;
+		+THRUACTORS;
+		+FORCEYBILLBOARD;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		A_SetScale(FRandom[Rain](0.1,0.3));
+		Alpha = FRandom[Rain](0.2,0.5);
+		Vel.Z = FRandom[Rain](-12.0,-16.0);
+	}
+	States
+	{
+	Spawn:
+		RAIN A -1;
+		Stop;
+	Death:
+		TNT1 A 1;
+		Stop;
+	}
+}
+
+Class mkRainmaker : Actor
+{
+	bool active;
+
+	override void Activate( Actor activator )
+	{
+		active = true;
+	}
+	override void Deactivate( Actor activator )
+	{
+		active = false;
+	}
+	override void PostBeginPlay()
+	{
+		Super.PostBeginPlay();
+		active = false;
+	}
+
+	action void A_DoRain()
+	{
+		if ( !invoker.active )
+		{
+			A_RemoveChildren(true);
+			return;
+		}
+		// pick random spots within volume
+		double x = args[0];
+		double y = args[1];
+		double z = args[2];
+		int num = args[3];
+		for ( int i=0; i<num; i++ )
+		{
+			Vector3 spawnpos = Vec3Offset(FRandom[Fog](-x,x),FRandom[Fog](-y,y),FRandom[Fog](-z,z));
+			if ( !level.IsPointInMap(spawnpos) ) continue;
+			let f = Spawn("mkRaindrop",spawnpos);
+			f.master = invoker;
+		}
+	}
+	Default
+	{
+		//$Title Rain Generator
+		//$Category Map
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+DONTSPLASH;
+	}
+	States
+	{
+	Spawn:
+		TNT1 A 3 A_DoRain();
+		Wait;
+	}
+}
+
+// some helper code for the door scripts
+Class mkACSUtil play
+{
+	// forcibly move players to the next room
+	static void ForceMovePlayers( int spot )
+	{
+		let aspot = ActorIterator.Create(spot).Next();
+		for ( int i=0; i<MAXPLAYERS; i++ )
+		{
+			if ( !playeringame[i] ) continue;
+			players[i].mo.SetOrigin(aspot.pos,false);
+			players[i].mo.A_SetAngle(aspot.angle);
+			players[i].mo.A_SetPitch(aspot.pitch);
+		}
+	}
+
+	// forcibly move just one player to the room
+	// used on coop respawns
+	static void ForceMoveOnePlayer( Actor a, int spot )
+	{
+		if ( !a.player ) return;
+		let aspot = ActorIterator.Create(spot).Next();
+		a.SetOrigin(aspot.pos,false);
+		a.A_SetAngle(aspot.angle);
+		a.A_SetPitch(aspot.pitch);
+	}
+
+	// push any blocking actors away from the destination spot
+	static void ClearSpot( Actor a, int spot )
+	{
+		let aspot = ActorIterator.Create(spot).Next();
+		let bt = BlockThingsIterator.Create(aspot,a.radius);
+		Vector2 shovedir;
+		while ( bt.Next() )
+		{
+			if ( bt.thing.player || bt.thing.bKILLED || !bt.thing.bSOLID ) continue;
+			shovedir = (cos(aspot.angle),sin(aspot.angle));
+			bt.thing.vel += shovedir*4;
+		}
+	}
+
+	// marks door as locked
+	static void MarkLocked( Actor a )
+	{
+		let mh = MapHandler(EventHandler.Find("MapHandler"));
+		Line last = mh.LastActivated;
+		if ( !last ) return;
+		last.locknumber = 240;
+	}
+	// unmarks locked door
+	static void MarkUnlocked( Actor a )
+	{
+		let mh = MapHandler(EventHandler.Find("MapHandler"));
+		Line last = mh.LastActivated;
+		if ( !last ) return;
+		last.locknumber = 242;
+	}
+	// marks door as jammed
+	static void MarkJammed( Actor a )
+	{
+		let mh = MapHandler(EventHandler.Find("MapHandler"));
+		Line last = mh.LastActivated;
+		if ( !last ) return;
+		last.locknumber = 241;
+	}
+	// marks door as visited
+	static void MarkVisited( Actor a )
+	{
+		let mh = MapHandler(EventHandler.Find("MapHandler"));
+		Line last = mh.LastActivated;
+		if ( !last ) return;
+		last.locknumber = 243;
+	}
+}
+
+// Dummy key so marked doors can still be used
+Class DummyKey : Key
+{
+	Default
+	{
+		Inventory.InterHubAmount 1;
+	}
+}
+
+// Room counter
+Class mkRoomCounter : Actor
+{
+	Default
+	{
+		+NOBLOCKMAP;
+		+NOGRAVITY;
+		+DONTSPLASH;
+	}
+	override void Activate( Actor activator )
+	{
+		if ( activator && activator.player ) activator.player.secretcount++;
+		level.found_secrets++;
+		Destroy();
+	}
+}
+
+// Hi
+Class mkMirrorMan : Actor
+{
+	int cdown;
+	bool bQuiet;
+	double vol;
+
+	override void Activate( Actor activator )
+	{
+		bQuiet = false;
+	}
+
+	override void Deactivate( Actor activator )
+	{
+		bQuiet = true;
+	}
+
+	static void ToPlayerSize( int tid )
+	{
+		let ai = ActorIterator.Create(tid);
+		Actor a;
+		while ( a = ai.Next() )
+		{
+			if ( !(a is 'mkMirrorMan') ) continue;
+			a.A_SetScale(0.095625);
+			a.A_SetSize(12,45);
+		}
+	}
+
+	private bool InConsoleplayerLOS()
+	{
+		if ( !CheckSight(players[consoleplayer].mo) )
+			return false;
+		double vfov = CVar.GetCVar('fov',players[consoleplayer]).GetFloat()*0.5;
+		double hfov = atan(Screen.GetAspectRatio()*tan(vfov));
+		let mo = players[consoleplayer].mo;
+		Vector3 ppos = mo.Vec2OffsetZ(0,0,mo.player.viewz);
+		Vector3 tpos = Vec3Offset(0,0,height*0.5);
+		Vector3 sc = level.SphericalCoords(ppos,tpos,(mo.angle,mo.pitch));
+		return ((abs(sc.x)<hfov)&&(abs(sc.y)<vfov));
+	}
+
+	override void Tick()
+	{
+		Super.Tick();
+		if ( InConsoleplayerLOS() )
+		{
+			alpha = max(alpha-0.32,0.0);
+			vol = max(vol-0.04,0.0);
+			if ( (alpha <= 0.0) && bAMBUSH ) Destroy();
+		}
+		else
+		{
+			alpha = min(alpha+0.04,1.2);
+			vol = min(vol+0.16,1.0);
+			if ( cdown-- < 0 )
+			{
+				cdown = Random[MirrorMan](90,280);
+				if ( !Random[MirrorMan](0,3) && !bQuiet && !bSTANDSTILL )
+					A_PlaySound("misc/lka",CHAN_VOICE,vol*0.25);
+			}
+		}
+		A_SoundVolume(CHAN_VOICE,vol*0.25);
+	}
+
+	Default
+	{
+		//$Title The Mirror Man
+		//$Sprite MRMNB0
+		//$Category Map
+		RenderStyle "Translucent";
+		Alpha 0.0;
+		Scale 0.17;
+		Radius 24;
+		Height 80;
+		+SOLID;
+		+NOGRAVITY;
+		+LOOKALLAROUND;
+	}
+
+	States
+	{
+	Spawn:
+		MRMN A -1 Bright;
+		Stop;
+		TNT1 A -1;	// Dummy
+		Stop;
+	}
+}

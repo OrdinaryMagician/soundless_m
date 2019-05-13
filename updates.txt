@@ -44,3 +44,21 @@ Update 9: The cleanup
 - Made Old Key spawn on the spot where the Vile Critter died. Should be easier to notice.
 - Bleeding texture shader has been rewritten. No longer needs tone mapping to be enabled and there are no more texture seams (requires a recent gzdoom devbuild)
 - Fixed Vile Critter projectiles not exploding on boss death.
+
+Update 10: The anniversary update
+
+- Fixed everything that could potentially break on 3.7 and up.
+- Small adjustments to the map. Now "under the stairs" makes more sense.
+- Tuned up a lot of text.
+- Tweaked enemies.
+  * Roaming critters now mind their own business unless you startle them, which is what I originally intended.
+  * Chomper critters aren't as annoying to get bitten by now.
+  * Brawler critters have a proper charge with a tackle on hit (this is also something I initally wanted but didn't know how to make).
+  * Vile critter shouldn't destroy the framerate anymore and is probably less annoying.
+- Fine-tuned the way save squares work. It's crimes™ but works.
+- Added a new difficulty setting, for those who seek a real challenge.
+- Added player sprites and sounds.
+- Added a neat visual effect during fake loading screens.
+- Added a little easter egg room that couldn't be done in time for the contest.
+- Added a special secret involving certain paintings.
+- Invited a surprise guest.
