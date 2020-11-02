@@ -62,3 +62,11 @@ Update 10: The anniversary update
 - Added a little easter egg room that couldn't be done in time for the contest.
 - Added a special secret involving certain paintings.
 - Invited a surprise guest.
+
+Update 10.1: Hotfix
+
+- Fix end level stats staying in the titlemap.
+
+Update 10.2: Hotfix 2 - Hotfix Harder
+
+- Backtracking to room 624 from otherworld 2nd floor started the wrong ambient, which would get stuck permanently.

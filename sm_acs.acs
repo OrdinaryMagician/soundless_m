@@ -1523,7 +1523,7 @@ function void DoorClose( int index )
 		DoorSound(3,MODE_CLOSE);
 		Thing_Activate(1124);
 		ScriptCall("mkAmbMix","MixStop","amb_0019");
-		ScriptCall("mkAmbMix","MixStart","amb_0024");
+		ScriptCall("mkAmbMix","MixStart","amb_0022");
 		break;
 	default:
 		Log(s:"Unhandled door index ",d:index,s:". Please contact the developer.");
